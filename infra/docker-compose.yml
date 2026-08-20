@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: planify
-      POSTGRES_PASSWORD: local
+      POSTGRES_PASSWORD: planify
       POSTGRES_DB: planify
     ports:
       - "5432:5432"
