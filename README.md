@@ -23,3 +23,18 @@ Este es el bootstrap inicial del proyecto. Los comandos de ejecución, configura
 - `feature/PLANIFY-<n>-descripcion` → `develop`
 - `release/*` → `main`
 - `hotfix/*` → `main`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
