@@ -17,3 +17,9 @@ Este es el bootstrap inicial del proyecto. Los comandos de ejecución, configura
 ## Repositorio Mobile
 
 [Planify Mobile](https://github.com/Planify-Lab-IV/planify-mobile)
+
+### Git Flow (convenciones a seguir a la hora de nombrar una branch)
+
+- `feature/PLANIFY-<n>-descripcion` → `develop`
+- `release/*` → `main`
+- `hotfix/*` → `main`
