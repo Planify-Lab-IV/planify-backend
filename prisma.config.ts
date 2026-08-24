@@ -6,9 +6,7 @@ import process from "process";
 
 const databaseUrl = process.env["DATABASE_URL"];
 if (!databaseUrl) {
-  throw new Error(
-    "DATABASE_URL environment variable is required to run Prisma commands.",
-  );
+  throw new Error("DATABASE_URL environment variable is required to run Prisma commands.");
 }
 
 export default defineConfig({
