@@ -20,6 +20,8 @@ model Usuario {
 model Grupo {
   id     String @id @default(uuid())
   nombre String
+
+  eventos Evento[]
 }
 
 model Evento {
@@ -27,6 +29,9 @@ model Evento {
   grupoId String @map("grupo_id")
   nombre  String
   estado  String @default("planificacion")
+
+  grupo         Grupo          @relation(fields: [grupoId], references: [id])
+  participantes Participante[]
 }
 
 model Participante {
@@ -34,4 +39,6 @@ model Participante {
   eventoId  String  @map("evento_id")
   username  String
   esAnonimo Boolean @default(false) @map("es_anonimo")
+
+  evento Evento @relation(fields: [eventoId], references: [id])
 }
