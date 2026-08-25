@@ -25,6 +25,20 @@ npx prisma generate
 npx prisma studio
 ```
 
+### Iniciar Aplicacion
+
+####
+
+`npm run dev`
+
+####
+
+`npm run start`
+
+####
+
+`npm run build`
+
 ## Repositorio Mobile
 
 [Planify Mobile](https://github.com/Planify-Lab-IV/planify-mobile)
