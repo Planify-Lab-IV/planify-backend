@@ -10,7 +10,10 @@
     "format:check": "prettier --check .",
     "prepare": "husky",
     "clean": "rm -rf node_modules package-lock.json && npm install",
-    "clean-w": "rimraf node_modules package-lock.json && npm install"
+    "clean-w": "rimraf node_modules package-lock.json && npm install",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.ts"
   },
   "repository": {
     "type": "git",
@@ -28,7 +31,8 @@
     "@prisma/client": "^7.9.1",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "helmet": "^8.3.0"
+    "helmet": "^8.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
