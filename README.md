@@ -14,6 +14,17 @@ npm install
 
 Este es el bootstrap inicial del proyecto. Los comandos de ejecución, configuración de base de datos y Docker se incorporarán en tickets posteriores.
 
+### Migrar Prisma
+
+```
+npx prisma format
+npx prisma validate
+npx prisma migrate dev --name init
+npx prisma generate
+
+npx prisma studio
+```
+
 ## Repositorio Mobile
 
 [Planify Mobile](https://github.com/Planify-Lab-IV/planify-mobile)

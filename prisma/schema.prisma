@@ -1,0 +1,43 @@
+// Schema referencial de prisma a la db
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Usuario {
+  id           String @id @default(uuid())
+  nombre       String
+  email        String @unique
+  passwordHash String @map("password_hash") // --> Mapea un atributo a una referencia
+  // de nombre diferente en la db
+}
+
+model Grupo {
+  id     String @id @default(uuid())
+  nombre String
+
+  eventos Evento[]
+}
+
+model Evento {
+  id      String @id @default(uuid())
+  grupoId String @map("grupo_id")
+  nombre  String
+  estado  String @default("planificacion")
+
+  grupo         Grupo          @relation(fields: [grupoId], references: [id])
+  participantes Participante[]
+}
+
+model Participante {
+  id        String  @id @default(uuid())
+  eventoId  String  @map("evento_id")
+  username  String
+  esAnonimo Boolean @default(false) @map("es_anonimo")
+
+  evento Evento @relation(fields: [eventoId], references: [id])
+}
