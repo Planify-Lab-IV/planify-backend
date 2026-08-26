@@ -25,19 +25,19 @@ npx prisma generate
 npx prisma studio
 ```
 
-### Iniciar Aplicacion
+## Iniciar Aplicacion
 
-####
+### Comandos
 
-`npm run dev`
-
-####
-
-`npm run start`
-
-####
-
-`npm run build`
+| Comando                | Descripción                     |
+| ---------------------- | ------------------------------- |
+| `npm run dev`          | Desarrollo con hot-reload       |
+| `npm run build`        | Compilar TypeScript             |
+| `npm run start`        | Ejecutar en producción          |
+| `npm run test`         | Correr tests                    |
+| `npm run lint`         | Verificar lint                  |
+| `npm run format`       | Formatear código                |
+| `npm run format:check` | Verificar formato sin modificar |
 
 ## Repositorio Mobile
 

@@ -6,3 +6,6 @@ coverage/
 .idea/
 .vscode/
 /src/generated/prisma
+test/*.js
+test/*.js.map
+test/*.d.ts.map
