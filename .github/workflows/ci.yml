@@ -31,6 +31,8 @@ jobs:
 
       - name: Generate Prisma Client
         run: npx prisma generate
+        env:
+          DATABASE_URL: postgresql://test:test@localhost:5432/planify_test
 
       - name: Test
         run: npm test
