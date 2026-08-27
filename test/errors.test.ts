@@ -7,7 +7,7 @@ describe("Error handling", () => {
     const res = await request(app).get("/no-existe");
     expect(res.status).toBe(404);
     expect(res.headers["content-type"]).toContain("application/json");
-    expect(res.body.error).toBe("NotFoundError");
+    expect(res.body.error).toBe("ROUTE_NOT_FOUND");
   });
 
   it("debería retornar 400 para JSON inválido", async () => {
@@ -27,7 +27,7 @@ describe("Error handling", () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(503);
     expect(res.headers["content-type"]).toContain("application/json");
-    expect(res.body.error).toBe("AppError");
+    expect(res.body.error).toBe("INTERNAL_SERVER_ERROR");
     expect(res.body.message).toBe("Database connection failed");
   });
 });
