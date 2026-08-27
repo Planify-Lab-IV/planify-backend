@@ -34,6 +34,9 @@ jobs:
         env:
           DATABASE_URL: postgresql://test:test@localhost:5432/planify_test
 
+      - name: Build
+        run: npm run build
+
       - name: Test
         run: npm test
         env:
