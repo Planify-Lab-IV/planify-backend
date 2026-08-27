@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import app from "../src/app.js";
 
@@ -18,5 +18,16 @@ describe("Error handling", () => {
     expect(res.status).toBe(400);
     expect(res.headers["content-type"]).toContain("application/json");
     expect(res.body.error).toBe("INVALID_JSON");
+  });
+
+  it("debería retornar 503 cuando la DB falla", async () => {
+    const { healthRepository } = await import("../src/repositories/health.repository.js");
+    vi.spyOn(healthRepository, "check").mockRejectedValueOnce(new Error("Connection refused"));
+
+    const res = await request(app).get("/health");
+    expect(res.status).toBe(503);
+    expect(res.headers["content-type"]).toContain("application/json");
+    expect(res.body.error).toBe("AppError");
+    expect(res.body.message).toBe("Database connection failed");
   });
 });
