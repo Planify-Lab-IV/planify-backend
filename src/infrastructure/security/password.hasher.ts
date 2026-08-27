@@ -1,3 +1,5 @@
+// Hashear contraseñas y verificar si matching entre hash y contraseña
+
 import bcrypt from "bcrypt"; // --> Libreria hashing
 
 export interface PasswordHasher {
@@ -6,7 +8,7 @@ export interface PasswordHasher {
 }
 
 export function createPasswordHasher(): PasswordHasher {
-  const SALT_ROUNDS = 10; // --> Para que para una misma contraseña el hash sea diferente
+  const SALT_ROUNDS = 10; // --> Para que para una misma contraseña el hash sea diferente, podria ser configurable
 
   return {
     async hash(plain) {
