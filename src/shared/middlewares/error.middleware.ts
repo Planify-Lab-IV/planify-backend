@@ -16,7 +16,7 @@ export function errorHandler(err: Error, _req: Request, res: Response, _next: Ne
     return;
   }
 
-  if (err.type === "entity.parse.failed") {
+  if ("type" in err && err.type === "entity.parse.failed") {
     res.status(400).json({
       error: "INVALID_JSON",
       message: "El body de la request no es JSON válido",
