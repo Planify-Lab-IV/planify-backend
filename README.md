@@ -25,6 +25,20 @@ npx prisma generate
 npx prisma studio
 ```
 
+## Iniciar Aplicacion
+
+### Comandos
+
+| Comando                | Descripción                     |
+| ---------------------- | ------------------------------- |
+| `npm run dev`          | Desarrollo con hot-reload       |
+| `npm run build`        | Compilar TypeScript             |
+| `npm run start`        | Ejecutar en producción          |
+| `npm run test`         | Correr tests                    |
+| `npm run lint`         | Verificar lint                  |
+| `npm run format`       | Formatear código                |
+| `npm run format:check` | Verificar formato sin modificar |
+
 ## Repositorio Mobile
 
 [Planify Mobile](https://github.com/Planify-Lab-IV/planify-mobile)

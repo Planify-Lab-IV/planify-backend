@@ -4,13 +4,16 @@
   "description": "Planify REST API backend with Express.js and Prisma",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "vitest run",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
     "clean": "rm -rf node_modules package-lock.json && npm install",
-    "clean-w": "rimraf node_modules package-lock.json && npm install"
+    "clean-w": "rimraf node_modules package-lock.json && npm install",
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "repository": {
     "type": "git",
@@ -25,10 +28,12 @@
   },
   "homepage": "https://github.com/Planify-Lab-IV/planify-backend#readme",
   "dependencies": {
-    "@prisma/client": "^7.9.1",
+    "@prisma/adapter-pg": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "helmet": "^8.3.0"
+    "helmet": "^8.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
