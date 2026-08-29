@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { createPasswordHasher } from "../src/infrastructure/security/password.hasher.js";
 import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 
+const TEST_SECRET = "test-secret-que-cumple-con-los-32-caracteres";
+
 describe("PasswordHasher", () => {
   const hasher = createPasswordHasher();
 
@@ -22,7 +24,7 @@ describe("PasswordHasher", () => {
 });
 
 describe("SessionTokenService", () => {
-  const service = createSessionTokenService("test-secret");
+  const service = createSessionTokenService(TEST_SECRET);
 
   it("devuelve el usuarioId desde un token firmado", () => {
     const token = service.sign("user-123");

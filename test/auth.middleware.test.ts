@@ -9,8 +9,10 @@ import { createSessionTokenService } from "../src/infrastructure/security/sessio
 import { createAuthMiddleware } from "../src/shared/middlewares/auth.middleware.js";
 import { errorHandler } from "../src/shared/middlewares/error.middleware.js";
 
+const TEST_SECRET = "test-secret-que-cumple-con-los-32-caracteres";
+
 function makeApp() {
-  const auth = createAuthMiddleware(createSessionTokenService("test-secret"));
+  const auth = createAuthMiddleware(createSessionTokenService(TEST_SECRET));
   const app = express();
   app.use(express.json());
 
@@ -39,7 +41,7 @@ describe("requireAuthenticatedUser", () => {
   });
 
   it("devuelve 401 si el token está firmado pero no tiene claim sub", async () => {
-    const tokenSinSub = jwt.sign({ rol: "invitado" }, "test-secret");
+    const tokenSinSub = jwt.sign({ rol: "invitado" }, TEST_SECRET);
     const res = await request(makeApp())
       .get("/protegida")
       .set("Authorization", `Bearer ${tokenSinSub}`);
@@ -48,7 +50,7 @@ describe("requireAuthenticatedUser", () => {
   });
 
   it("deja pasar con un token válido", async () => {
-    const token = createSessionTokenService("test-secret").sign("user-42");
+    const token = createSessionTokenService(TEST_SECRET).sign("user-42");
     const res = await request(makeApp()).get("/protegida").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.usuarioId).toBe("user-42");
