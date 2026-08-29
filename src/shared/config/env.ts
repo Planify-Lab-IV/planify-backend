@@ -12,6 +12,8 @@ const envSchema = z.object({
   // --> Valida existencia de la variable DATABASE_URL
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   // --> Valida que la direccion sea un string y defaultea
+  JWT_SECRET: z.string().min(1),
+  // -->
 });
 
 export const env = envSchema.parse(process.env);
