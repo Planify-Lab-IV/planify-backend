@@ -16,9 +16,18 @@ export function createSessionTokenService(secret: string): SessionTokenService {
       return jwt.sign({ sub: usuarioId }, secret, { expiresIn: EXPIRES_IN });
     },
 
-    verify(token) {
-      const payload = jwt.verify(token, secret) as jwt.JwtPayload;
-      return String(payload.sub);
+    verify(token: string): string {
+      const payload = jwt.verify(token, secret);
+      if (
+        typeof payload !== "object" ||
+        payload === null ||
+        !("sub" in payload) ||
+        typeof payload.sub !== "string" || // --> Verifica tanto que payload sea un objeto valido como que el token sea de caracter sub
+        payload.sub.trim() === ""
+      ) {
+        throw new Error("Token payload inválido: falta el claim sub");
+      }
+      return payload.sub;
     },
   };
 }
