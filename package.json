@@ -13,7 +13,8 @@
     "clean-w": "rimraf node_modules package-lock.json && npm install",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "db:seed": "prisma db seed"
   },
   "repository": {
     "type": "git",
@@ -58,6 +59,9 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.67.0",
     "vitest": "^4.1.10"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "lint-staged": {
     "*.{js,mjs,cjs,ts}": [

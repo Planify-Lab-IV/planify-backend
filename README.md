@@ -38,6 +38,7 @@ npx prisma studio
 | `npm run lint`         | Verificar lint                  |
 | `npm run format`       | Formatear código                |
 | `npm run format:check` | Verificar formato sin modificar |
+| `npm run db:seed`      | Poblar DB con dev_users         |
 
 ## Repositorio Mobile
 
