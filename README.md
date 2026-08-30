@@ -38,6 +38,15 @@ npx prisma studio
 | `npm run lint`         | Verificar lint                  |
 | `npm run format`       | Formatear código                |
 | `npm run format:check` | Verificar formato sin modificar |
+| `npm run db:seed`      | Poblar DB con dev_users         |
+
+#### Credenciales de Desarrollo
+
+| Nombre | Email              | Contraseña    |
+| :----- | :----------------- | :------------ |
+| `dev1` | `dev1@planify.dev` | `DevPass123!` |
+| `dev2` | `dev2@planify.dev` | `DevPass123!` |
+| `dev3` | `dev3@planify.dev` | `DevPass123!` |
 
 ## Repositorio Mobile
 

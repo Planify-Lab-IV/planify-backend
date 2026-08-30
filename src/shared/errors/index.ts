@@ -23,3 +23,9 @@ export class ValidationError extends AppError {
     super(message, 400, "INVALID_DATA");
   }
 }
+
+export class UnauthorizedError extends AppError {
+  constructor(message = "No autorizado") {
+    super(message, 401, "UNAUTHORIZED");
+  }
+}

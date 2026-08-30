@@ -1,4 +1,5 @@
 // Logica de negocio, decide que hacer si la DB falla. Solo recibe datos y retorna datos
+// No se importa librerias ni otro componentes, solo se recibe la abstraccion y la usa al igual que el controller
 
 import type { HealthRepository } from "../repositories/health.repository.js";
 import { AppError } from "../shared/errors/index.js";
