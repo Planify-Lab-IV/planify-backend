@@ -6,12 +6,13 @@ import type { PasswordHasher } from "../infrastructure/security/password.hasher.
 import type { SessionTokenService } from "../infrastructure/security/session.token.service.js";
 import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
 
-// --> DTO que pasa solo los datos necesarios para el login
+// --> Solo los datos necesarios para el login
 export interface LoginDTO {
   identifier: string;
   password: string;
 }
 
+// --> Lo que el service promete devolver
 export interface AuthResult {
   user: Usuario;
   token: string;
@@ -38,23 +39,22 @@ export function createAuthService(
 
       const cleanIdentifier = identifier.trim();
 
-      // 2. Buscar usuario por email o nombre (username)
+      // --> Busca el usuario por email o nombre
       const user = await usuarioRepository.findByIdentifier(cleanIdentifier);
       if (!user) {
-        // Mismo mensaje para usuario inexistente y password incorrecta (prevención de enumeración)
         throw new UnauthorizedError("Credenciales inválidas");
       }
 
-      // 3. Comparar la contraseña provista con el hash almacenado
+      // --> Compara la password provista con el hash almacenado
       const isPasswordValid = await passwordHasher.compare(password, user.passwordHash);
       if (!isPasswordValid) {
         throw new UnauthorizedError("Credenciales inválidas");
       }
 
-      // 4. Generar el JWT firmado para la sesión
+      // --> Generar el JWT firmado para la sesión
       const token = sessionTokenService.sign(user.id);
 
-      // 5. Retornar usuario canónico (sin passwordHash) y el token emitido
+      // --> Retornar usuario canónico (sin passwordHash) y el token emitido
       return {
         user: {
           id: user.id,
