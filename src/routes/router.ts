@@ -1,15 +1,22 @@
-// Punto unica de entrada de todas las rutas que luego usa app
+// Punto de entrada único
 
 import { Router } from "express";
-import healthRouter from "./health.js";
-import { NotFoundError } from "../shared/errors/index.js";
+import { createAuthController } from "../controllers/auth.controller.js";
+import { createAuthService } from "../services/auth.service.js";
+import { usuarioRepository } from "../repositories/usuario.repository.js";
+import { createPasswordHasher } from "../infrastructure/security/password.hasher.js";
+import { createSessionTokenService } from "../infrastructure/security/session.token.service.js";
+import { env } from "../shared/config/env.js";
 
 const router = Router();
 
-router.use(healthRouter);
+// --> Inyección de dependencias
+const passwordHasher = createPasswordHasher();
+const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
+const authService = createAuthService(usuarioRepository, passwordHasher, sessionTokenService);
+const authController = createAuthController(authService);
 
-router.use((_req, _res, next) => {
-  next(new NotFoundError("Ruta no encontrada"));
-});
+// --> Endpoint POST de auth/login
+router.post("/auth/login", (req, res, next) => authController.login(req, res, next));
 
 export default router;
