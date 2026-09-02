@@ -7,7 +7,7 @@ describe("Error handling", () => {
     const res = await request(app).get("/no-existe");
     expect(res.status).toBe(404);
     expect(res.headers["content-type"]).toContain("application/json");
-    expect(res.body.error).toBe("ROUTE_NOT_FOUND");
+    expect(res.body.error).toBe("NOT_FOUND");
   });
 
   it("debería retornar 400 para JSON inválido", async () => {
