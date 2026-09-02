@@ -43,13 +43,13 @@ model Grupo {
 }
 
 model Evento {
-  id        String   @id @default(uuid())
-  grupoId   String   @map("grupo_id")
-  nombre    String
-  estado    String   @default("planificacion")
+  id      String @id @default(uuid())
+  grupoId String @map("grupo_id")
+  nombre  String
+  estado  String @default("planificacion")
 
   creatorId String   @map("creado_por_usuario_id")
-  placeText String?  @map("lugar_texto")
+  textPlace String?  @map("lugar_texto")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -61,15 +61,15 @@ model Evento {
 }
 
 model Participante {
-  id            String   @id @default(uuid())
-  eventoId      String   @map("evento_id")
-  usuarioId     String?  @map("usuario_id")
+  id            String  @id @default(uuid())
+  eventoId      String  @map("evento_id")
+  usuarioId     String? @map("usuario_id")
   username      String
-  esAnonimo     Boolean  @default(false) @map("es_anonimo")
-  esOrganizador Boolean  @default(false) @map("es_organizador")
+  esAnonimo     Boolean @default(false) @map("es_anonimo")
+  esOrganizador Boolean @default(false) @map("es_organizador")
 
-  evento        Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
-  usuario       Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  evento  Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   @@index([eventoId])
   @@index([usuarioId])

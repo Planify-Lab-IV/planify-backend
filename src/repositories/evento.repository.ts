@@ -15,7 +15,7 @@ export interface EventoCreado {
   grupoId: string;
   creatorId: string;
   nombre: string;
-  placeText: string | null;
+  textPlace: string | null;
   estado: string;
   createdAt: Date;
   updatedAt: Date;
@@ -24,13 +24,15 @@ export interface EventoCreado {
 
 export interface CreateEventParams {
   nombre: string;
-  placeText?: string;
+  textPlace?: string | undefined;
   creatorId: string;
-  grupoId?: string;
-  nuevoGrupo?: {
-    nombre: string;
-    miembrosIds: string[];
-  };
+  grupoId?: string | undefined;
+  nuevoGrupo?:
+    | {
+        nombre: string;
+        miembrosIds: string[];
+      }
+    | undefined;
   participantes: {
     usuarioId: string;
     username: string;
@@ -82,7 +84,7 @@ export const eventoRepository: EventoRepository = {
       const evento = await tx.evento.create({
         data: {
           nombre: params.nombre,
-          placeText: params.placeText ?? null,
+          textPlace: params.textPlace ?? null,
           grupoId: finalGrupoId,
           creatorId: params.creatorId,
           participantes: {
