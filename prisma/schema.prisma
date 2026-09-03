@@ -12,15 +12,34 @@ model Usuario {
   id           String @id @default(uuid())
   nombre       String
   email        String @unique
-  passwordHash String @map("password_hash") // --> Mapea un atributo a una referencia
-  // de nombre diferente en la db
+  passwordHash String @map("password_hash")
+
+  membresias      MiembroGrupo[]
+  participaciones Participante[]
+  createdEvents   Evento[]
+
+  @@map("usuario")
+}
+
+model MiembroGrupo {
+  usuarioId String @map("usuario_id")
+  grupoId   String @map("grupo_id")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  grupo   Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, grupoId])
+  @@map("miembro_grupo")
 }
 
 model Grupo {
   id     String @id @default(uuid())
   nombre String
 
-  eventos Evento[]
+  eventos  Evento[]
+  miembros MiembroGrupo[]
+
+  @@map("grupo")
 }
 
 model Evento {
@@ -29,15 +48,30 @@ model Evento {
   nombre  String
   estado  String @default("planificacion")
 
+  creatorId String   @map("creado_por_usuario_id")
+  textPlace String?  @map("lugar_texto")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
   grupo         Grupo          @relation(fields: [grupoId], references: [id])
+  creator       Usuario        @relation(fields: [creatorId], references: [id])
   participantes Participante[]
+
+  @@map("evento")
 }
 
 model Participante {
-  id        String  @id @default(uuid())
-  eventoId  String  @map("evento_id")
-  username  String
-  esAnonimo Boolean @default(false) @map("es_anonimo")
+  id            String  @id @default(uuid())
+  eventoId      String  @map("evento_id")
+  usuarioId     String? @map("usuario_id")
+  username      String
+  esAnonimo     Boolean @default(false) @map("es_anonimo")
+  esOrganizador Boolean @default(false) @map("es_organizador")
 
-  evento Evento @relation(fields: [eventoId], references: [id])
+  evento  Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  usuario Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  @@index([eventoId])
+  @@index([usuarioId])
+  @@map("participante")
 }
