@@ -87,7 +87,7 @@ describe("POST /events", () => {
     const mockEventoCreado = {
       id: "evento-1",
       nombre: "Cumple",
-      placeText: "Casa de Ana",
+      textPlace: "Casa de Ana",
       grupoId: "grupo-existente-1",
       creatorId: mockOrganizerId,
       estado: "planificacion",
@@ -113,9 +113,11 @@ describe("POST /events", () => {
       ],
     };
 
+    const createEvento = vi.fn().mockResolvedValue(mockEventoCreado);
+
     vi.mocked(prisma.$transaction).mockImplementationOnce((async (cb: (tx: unknown) => unknown) => {
       return cb({
-        evento: { create: vi.fn().mockResolvedValue(mockEventoCreado) },
+        evento: { create: createEvento },
       });
     }) as never);
 
@@ -124,7 +126,7 @@ describe("POST /events", () => {
       .set("Authorization", `Bearer ${validToken}`)
       .send({
         nombre: "Cumple",
-        lugarTexto: "Casa de Ana",
+        textPlace: "Casa de Ana",
         grupoId: "grupo-existente-1",
       });
 
@@ -132,6 +134,13 @@ describe("POST /events", () => {
     expect(res.body.id).toBe("evento-1");
     expect(res.body.participantes).toHaveLength(2);
     expect(res.body.participantes[0].esOrganizador).toBe(true);
+    expect(createEvento).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          textPlace: "Casa de Ana",
+        }),
+      }),
+    );
   });
 
   it("debería retornar 403 si el organizador no pertenece al grupo existente", async () => {

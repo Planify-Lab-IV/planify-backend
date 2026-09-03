@@ -4,7 +4,7 @@ import { Router } from "express";
 import healthRouter from "./health.js";
 import authRouter from "./auth.js";
 import eventsRouter from "./events.js";
-import { NotFoundError } from "../shared/errors/index.js";
+import { RouteNotFoundError } from "../shared/errors/index.js";
 
 const router = Router();
 
@@ -14,7 +14,7 @@ router.use(eventsRouter);
 
 // Handler 404 para cualquier ruta no mapeada
 router.use((_req, _res, next) => {
-  next(new NotFoundError("Ruta no encontrada"));
+  next(new RouteNotFoundError("Ruta no encontrada"));
 });
 
 export default router;

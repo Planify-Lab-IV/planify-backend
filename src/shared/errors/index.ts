@@ -13,8 +13,14 @@ export class AppError extends Error {
 }
 
 export class NotFoundError extends AppError {
-  constructor(message = "Recurso no encontrado") {
-    super(message, 404, "NOT_FOUND");
+  constructor(message = "Recurso no encontrado", code = "NOT_FOUND") {
+    super(message, 404, code);
+  }
+}
+
+export class RouteNotFoundError extends NotFoundError {
+  constructor(message = "Ruta no encontrada") {
+    super(message, "ROUTE_NOT_FOUND");
   }
 }
 
