@@ -28,12 +28,8 @@ model MiembroGrupo {
   usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   grupo   Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
 
-<<<<<<< HEAD
   @@id([usuarioId, grupoId])
-=======
-  @@id([usuarioId, grupoId]) // --> Primary key compuesta
   @@index([grupoId])
->>>>>>> e2257ef7493d2cf86d294466e9242ba47d42c3cf
   @@map("miembro_grupo")
 }
 
@@ -53,13 +49,13 @@ model Evento {
   nombre  String
   estado  String @default("planificacion")
 
-  creatorId String   @map("creado_por_usuario_id")
+  creatorId String?  @map("creado_por_usuario_id")
   textPlace String?  @map("lugar_texto")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   grupo         Grupo          @relation(fields: [grupoId], references: [id])
-  creator       Usuario        @relation(fields: [creatorId], references: [id])
+  creator       Usuario?       @relation(fields: [creatorId], references: [id])
   participantes Participante[]
 
   @@map("evento")

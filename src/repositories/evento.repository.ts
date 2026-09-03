@@ -13,7 +13,7 @@ export interface ParticipanteEvento {
 export interface EventoCreado {
   id: string;
   grupoId: string;
-  creatorId: string;
+  creatorId: string | null;
   nombre: string;
   textPlace: string | null;
   estado: string;
