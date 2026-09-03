@@ -14,13 +14,33 @@ model Usuario {
   email        String @unique
   passwordHash String @map("password_hash") // --> Mapea un atributo a una referencia
   // de nombre diferente en la db
+
+  membresias      MiembroGrupo[]
+  participaciones Participante[]
+
+  @@map("usuario")
+}
+
+model MiembroGrupo {
+  usuarioId String @map("usuario_id")
+  grupoId   String @map("grupo_id")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  grupo   Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, grupoId]) // --> Primary key compuesta
+  @@index([grupoId])
+  @@map("miembro_grupo")
 }
 
 model Grupo {
   id     String @id @default(uuid())
   nombre String
 
-  eventos Evento[]
+  eventos  Evento[]
+  miembros MiembroGrupo[]
+
+  @@map("grupo")
 }
 
 model Evento {
@@ -34,10 +54,16 @@ model Evento {
 }
 
 model Participante {
-  id        String  @id @default(uuid())
-  eventoId  String  @map("evento_id")
-  username  String
-  esAnonimo Boolean @default(false) @map("es_anonimo")
+  id            String   @id @default(uuid())
+  eventoId      String   @map("evento_id")
+  usuarioId     String?  @map("usuario_id") // --> Nullable para soportar participantes anónimos
+  username      String
+  esAnonimo     Boolean  @default(false) @map("es_anonimo")
+  esOrganizador Boolean  @default(false) @map("es_organizador")
+  evento        Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
+  usuario       Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
-  evento Evento @relation(fields: [eventoId], references: [id])
+  @@index([eventoId]) // --> Para optimizar consultas frecuentes
+  @@index([usuarioId])
+  @@map("participante")
 }
