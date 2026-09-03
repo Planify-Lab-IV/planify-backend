@@ -2,7 +2,7 @@
 
 import type { EventoRepository, EventoCreado } from "../repositories/evento.repository.js";
 import type { GrupoRepository } from "../repositories/grupo.repository.js";
-import type { UsuarioRepository, UsuarioConPassword } from "../repositories/usuario.repository.js";
+import type { UsuarioRepository, Usuario } from "../repositories/usuario.repository.js";
 import { ValidationError, NotFoundError, ForbiddenError } from "../shared/errors/index.js";
 import type { CreateEventDTO } from "../validators/event.validator.js";
 
@@ -71,14 +71,14 @@ export function createEventService(
       const nuevoGrupoNombre = dto.nuevoGrupoNombre!.trim();
       const rawIdentifiers = dto.memberIdentifiers ?? [];
 
-      const resolvedUsers: UsuarioConPassword[] = [];
+      const resolvedUsers: Usuario[] = [];
 
       for (const identifier of rawIdentifiers) {
         // --> Busca que existan todos los usuarios en la db
         const cleanIdentifier = identifier.trim();
         if (!cleanIdentifier) continue;
 
-        const user = await usuarioRepository.findByIdentifier(cleanIdentifier);
+        const user = await usuarioRepository.findPublicByIdentifier(cleanIdentifier);
         if (!user) {
           throw new NotFoundError(`Usuario no encontrado para el identificador: ${identifier}`);
         }
@@ -90,12 +90,7 @@ export function createEventService(
 
       // --> Garantizar que el organizador esté siempre incluido en el nuevo grupo
       if (!resolvedUsers.some((u) => u.id === creator.id)) {
-        resolvedUsers.push({
-          id: creator.id,
-          nombre: creator.nombre,
-          email: creator.email,
-          passwordHash: "",
-        });
+        resolvedUsers.push(creator);
       }
 
       const participantes = resolvedUsers.map((u) => ({

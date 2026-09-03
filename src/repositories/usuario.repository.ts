@@ -18,6 +18,7 @@ export interface UsuarioConPassword extends Usuario {
 export interface UsuarioRepository {
   findById(id: string): Promise<Usuario | null>;
   findByEmail(email: string): Promise<Usuario | null>;
+  findPublicByIdentifier(identifier: string): Promise<Usuario | null>;
   findByIdentifier(identifier: string): Promise<UsuarioConPassword | null>;
   create(data: { nombre: string; email: string; passwordHash: string }): Promise<Usuario>;
 }
@@ -39,7 +40,19 @@ export const usuarioRepository: UsuarioRepository = {
     return user;
   },
 
-  // Busca tanto por email como por nombre de usuario
+  // Busca un usuario por email o nombre sin exponer datos de autenticación.
+  async findPublicByIdentifier(identifier: string): Promise<Usuario | null> {
+    const user = await prisma.usuario.findFirst({
+      where: {
+        OR: [{ email: identifier }, { nombre: identifier }],
+      },
+      select: { id: true, nombre: true, email: true },
+    });
+
+    return user;
+  },
+
+  // Búsqueda exclusiva para autenticación: incluye el hash de la contraseña.
   async findByIdentifier(identifier: string): Promise<UsuarioConPassword | null> {
     const user = await prisma.usuario.findFirst({
       where: {

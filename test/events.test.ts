@@ -35,7 +35,6 @@ describe("POST /events", () => {
     id: mockOrganizerId,
     nombre: "organizador",
     email: "organizador@test.com",
-    passwordHash: "hash",
   };
 
   beforeEach(() => {
@@ -194,7 +193,6 @@ describe("POST /events", () => {
       id: "user-ana",
       nombre: "ana",
       email: "ana@example.com",
-      passwordHash: "hash",
     };
 
     vi.mocked(prisma.usuario.findFirst).mockResolvedValueOnce(mockMember as never);
