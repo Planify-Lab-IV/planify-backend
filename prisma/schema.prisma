@@ -29,6 +29,7 @@ model MiembroGrupo {
   grupo   Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
 
   @@id([usuarioId, grupoId]) // --> Primary key compuesta
+  @@index([grupoId])
   @@map("miembro_grupo")
 }
 
