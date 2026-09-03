@@ -67,6 +67,22 @@ describe("POST /events", () => {
     expect(res.body.error).toBe("INVALID_DATA");
   });
 
+  it.each([
+    { nombre: "Evento", grupoId: 123 },
+    { nombre: "Evento", nuevoGrupoNombre: 123 },
+    { nombre: "Evento", textPlace: 123, grupoId: "grupo-1" },
+    { nombre: "Evento", nuevoGrupoNombre: "Grupo", memberIdentifiers: "ana@test.com" },
+    { nombre: "Evento", nuevoGrupoNombre: "Grupo", memberIdentifiers: [null] },
+  ])("debería retornar 400 para un DTO inválido: %o", async (payload) => {
+    const res = await request(app)
+      .post("/events")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send(payload);
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("INVALID_DATA");
+  });
+
   it("debería crear un evento con grupo existente correctamente", async () => {
     vi.mocked(prisma.usuario.findUnique).mockResolvedValueOnce(mockOrganizer as never);
 

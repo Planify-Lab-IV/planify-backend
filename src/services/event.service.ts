@@ -4,14 +4,7 @@ import type { EventoRepository, EventoCreado } from "../repositories/evento.repo
 import type { GrupoRepository } from "../repositories/grupo.repository.js";
 import type { UsuarioRepository, UsuarioConPassword } from "../repositories/usuario.repository.js";
 import { ValidationError, NotFoundError, ForbiddenError } from "../shared/errors/index.js";
-
-export interface CreateEventDTO {
-  nombre: string;
-  textPlace?: string | undefined;
-  grupoId?: string | undefined;
-  nuevoGrupoNombre?: string | undefined;
-  memberIdentifiers?: string[] | undefined;
-}
+import type { CreateEventDTO } from "../validators/event.validator.js";
 
 export interface EventService {
   createEvent(creatorId: string, dto: CreateEventDTO): Promise<EventoCreado>;
