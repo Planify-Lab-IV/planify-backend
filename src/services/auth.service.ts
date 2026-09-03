@@ -1,7 +1,7 @@
 // Lógica de negocio para la autenticación de usuarios.
 // Coordina repositorio, hasher de contraseñas y emisor de tokens de sesión.
 
-import type { Usuario, UsuarioRepository } from "../repositories/usuario.repository.js";
+import type { User, UserRepository } from "../repositories/user.repository.js";
 import type { PasswordHasher } from "../infrastructure/security/password.hasher.js";
 import type { SessionTokenService } from "../infrastructure/security/session.token.service.js";
 import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
@@ -14,7 +14,7 @@ export interface LoginDTO {
 
 // --> Lo que el service promete devolver
 export interface AuthResult {
-  user: Usuario;
+  user: User;
   token: string;
 }
 
@@ -23,7 +23,7 @@ export interface AuthService {
 }
 
 export function createAuthService(
-  usuarioRepository: UsuarioRepository,
+  userRepository: UserRepository,
   passwordHasher: PasswordHasher,
   sessionTokenService: SessionTokenService,
 ): AuthService {
@@ -39,8 +39,8 @@ export function createAuthService(
 
       const cleanIdentifier = identifier.trim();
 
-      // --> Busca el usuario por email o nombre
-      const user = await usuarioRepository.findByIdentifier(cleanIdentifier);
+      // --> Busca el usuario por email o username.
+      const user = await userRepository.findByIdentifier(cleanIdentifier);
       if (!user) {
         throw new UnauthorizedError("Credenciales inválidas");
       }
@@ -58,7 +58,8 @@ export function createAuthService(
       return {
         user: {
           id: user.id,
-          nombre: user.nombre,
+          name: user.name,
+          username: user.username,
           email: user.email,
         },
         token,

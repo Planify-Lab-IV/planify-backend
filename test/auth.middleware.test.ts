@@ -17,7 +17,7 @@ function makeApp() {
   app.use(express.json());
 
   app.get("/protegida", auth, (req: Request, res: Response) => {
-    res.status(200).json({ usuarioId: req.usuarioId });
+    res.status(200).json({ userId: req.userId });
   });
 
   app.use(errorHandler);
@@ -53,6 +53,6 @@ describe("requireAuthenticatedUser", () => {
     const token = createSessionTokenService(TEST_SECRET).sign("user-42");
     const res = await request(makeApp()).get("/protegida").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.usuarioId).toBe("user-42");
+    expect(res.body.userId).toBe("user-42");
   });
 });

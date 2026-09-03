@@ -13,8 +13,14 @@ export class AppError extends Error {
 }
 
 export class NotFoundError extends AppError {
-  constructor(message = "Recurso no encontrado") {
-    super(message, 404, "ROUTE_NOT_FOUND");
+  constructor(message = "Recurso no encontrado", code = "NOT_FOUND") {
+    super(message, 404, code);
+  }
+}
+
+export class RouteNotFoundError extends NotFoundError {
+  constructor(message = "Ruta no encontrada") {
+    super(message, "ROUTE_NOT_FOUND");
   }
 }
 
@@ -27,5 +33,12 @@ export class ValidationError extends AppError {
 export class UnauthorizedError extends AppError {
   constructor(message = "No autorizado") {
     super(message, 401, "UNAUTHORIZED");
+  }
+}
+
+// --> Maneja el caso donde un usuario autenticado intenta ingresar a un grupo que no pertenece
+export class ForbiddenError extends AppError {
+  constructor(message = "Acceso denegado") {
+    super(message, 403, "FORBIDDEN");
   }
 }

@@ -8,62 +8,72 @@ datasource db {
   provider = "postgresql"
 }
 
-model Usuario {
+model User {
   id           String @id @default(uuid())
-  nombre       String
+  name         String @map("nombre")
+  username     String @unique
   email        String @unique
-  passwordHash String @map("password_hash") // --> Mapea un atributo a una referencia
-  // de nombre diferente en la db
+  passwordHash String @map("password_hash")
 
-  membresias      MiembroGrupo[]
-  participaciones Participante[]
+  groupMemberships    GroupMember[]
+  eventParticipations EventParticipant[]
+  organizedEvents     Event[]            @relation("EventOrganizer")
 
   @@map("usuario")
 }
 
-model MiembroGrupo {
-  usuarioId String @map("usuario_id")
-  grupoId   String @map("grupo_id")
+model GroupMember {
+  userId  String @map("usuario_id")
+  groupId String @map("grupo_id")
 
-  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
-  grupo   Grupo   @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
-  @@id([usuarioId, grupoId]) // --> Primary key compuesta
-  @@index([grupoId])
+  @@id([userId, groupId])
+  @@index([groupId])
   @@map("miembro_grupo")
 }
 
-model Grupo {
-  id     String @id @default(uuid())
-  nombre String
+model Group {
+  id   String @id @default(uuid())
+  name String @map("nombre")
 
-  eventos  Evento[]
-  miembros MiembroGrupo[]
+  events  Event[]
+  members GroupMember[]
 
   @@map("grupo")
 }
 
-model Evento {
+model Event {
   id      String @id @default(uuid())
-  grupoId String @map("grupo_id")
-  nombre  String
-  estado  String @default("planificacion")
+  groupId String @map("grupo_id")
+  name    String @map("nombre")
+  status  String @default("active") @map("estado")
 
-  grupo         Grupo          @relation(fields: [grupoId], references: [id])
-  participantes Participante[]
+  organizerId String   @map("creado_por_usuario_id")
+  location    String   @map("lugar_texto")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  group        Group              @relation(fields: [groupId], references: [id])
+  organizer    User               @relation("EventOrganizer", fields: [organizerId], references: [id])
+  participants EventParticipant[]
+
+  @@map("evento")
 }
 
-model Participante {
-  id            String   @id @default(uuid())
-  eventoId      String   @map("evento_id")
-  usuarioId     String?  @map("usuario_id") // --> Nullable para soportar participantes anónimos
-  username      String
-  esAnonimo     Boolean  @default(false) @map("es_anonimo")
-  esOrganizador Boolean  @default(false) @map("es_organizador")
-  evento        Evento   @relation(fields: [eventoId], references: [id], onDelete: Cascade)
-  usuario       Usuario? @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+model EventParticipant {
+  id          String  @id @default(uuid())
+  eventId     String  @map("evento_id")
+  userId      String? @map("usuario_id")
+  username    String
+  isAnonymous Boolean @default(false) @map("es_anonimo")
+  isOrganizer Boolean @default(false) @map("es_organizador")
 
-  @@index([eventoId]) // --> Para optimizar consultas frecuentes
-  @@index([usuarioId])
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([userId])
   @@map("participante")
 }

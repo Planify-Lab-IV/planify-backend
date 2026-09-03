@@ -3,7 +3,7 @@
 import jwt from "jsonwebtoken";
 
 export interface SessionTokenService {
-  sign(usuarioId: string): string; // --> Crea token firmado con ese usuario
+  sign(userId: string): string; // --> Crea token firmado con ese usuario
   verify(token: string): string; // --> Valida token
 }
 
@@ -12,8 +12,8 @@ export function createSessionTokenService(secret: string): SessionTokenService {
   const EXPIRES_IN = "7d"; // --> Lo que dura la sesion, podria ser configurable
 
   return {
-    sign(usuarioId) {
-      return jwt.sign({ sub: usuarioId }, secret, { expiresIn: EXPIRES_IN });
+    sign(userId) {
+      return jwt.sign({ sub: userId }, secret, { expiresIn: EXPIRES_IN });
     },
 
     verify(token: string): string {
