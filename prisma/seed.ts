@@ -9,17 +9,20 @@ const hasher = createPasswordHasher();
 
 const DEV_USERS = [
   {
-    nombre: "dev1",
+    name: "dev1",
+    username: "dev1",
     email: "dev1@planify.dev",
     passwordPlano: "DevPass123!",
   },
   {
-    nombre: "dev2",
+    name: "dev2",
+    username: "dev2",
     email: "dev2@planify.dev",
     passwordPlano: "DevPass123!",
   },
   {
-    nombre: "dev3",
+    name: "dev3",
+    username: "dev3",
     email: "dev3@planify.dev",
     passwordPlano: "DevPass123!", // --> Hash deberia ser diferente entre users pese a ser igual la password
   },
@@ -30,14 +33,16 @@ async function main() {
   for (const u of DEV_USERS) {
     const passwordHash = await hasher.hash(u.passwordPlano);
 
-    const user = await prisma.usuario.upsert({
+    const user = await prisma.user.upsert({
       where: { email: u.email },
       update: {
-        nombre: u.nombre,
+        name: u.name,
+        username: u.username,
         passwordHash,
       },
       create: {
-        nombre: u.nombre,
+        name: u.name,
+        username: u.username,
         email: u.email,
         passwordHash,
       },

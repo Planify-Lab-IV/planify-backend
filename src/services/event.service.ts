@@ -1,113 +1,99 @@
-// Aplicas reglas de negocio como validaciones y alteraciones
-
-import type { EventoRepository, EventoCreado } from "../repositories/evento.repository.js";
-import type { GrupoRepository } from "../repositories/grupo.repository.js";
-import type { UsuarioRepository, Usuario } from "../repositories/usuario.repository.js";
+import type { Event, EventRepository } from "../repositories/event.repository.js";
+import type { GroupRepository } from "../repositories/group.repository.js";
+import type { UserRepository, User } from "../repositories/user.repository.js";
 import { ValidationError, NotFoundError, ForbiddenError } from "../shared/errors/index.js";
 import type { CreateEventDTO } from "../validators/event.validator.js";
 
 export interface EventService {
-  createEvent(creatorId: string, dto: CreateEventDTO): Promise<EventoCreado>;
+  createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event>;
 }
 
 export function createEventService(
-  eventoRepository: EventoRepository,
-  grupoRepository: GrupoRepository,
-  usuarioRepository: UsuarioRepository,
+  eventRepository: EventRepository,
+  groupRepository: GroupRepository,
+  userRepository: UserRepository,
 ): EventService {
   return {
-    async createEvent(creatorId: string, dto: CreateEventDTO): Promise<EventoCreado> {
-      if (!dto.nombre || typeof dto.nombre !== "string" || dto.nombre.trim() === "") {
+    async createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event> {
+      if (!dto.name.trim()) {
         throw new ValidationError("El nombre del evento es requerido");
       }
 
-      const hasGrupoId = Boolean(dto.grupoId && dto.grupoId.trim() !== "");
-      const hasNuevoGrupo = Boolean(dto.nuevoGrupoNombre && dto.nuevoGrupoNombre.trim() !== "");
+      const hasGroupId = Boolean(dto.groupId?.trim());
+      const hasNewGroupName = Boolean(dto.newGroupName?.trim());
 
-      // --> Validación de exclusión mutua
-      if (hasGrupoId && hasNuevoGrupo) {
-        throw new ValidationError("Debe enviarse grupoId o nuevoGrupoNombre, pero no ambos");
+      if (hasGroupId && hasNewGroupName) {
+        throw new ValidationError("Debe enviarse groupId o newGroupName, pero no ambos");
       }
-      if (!hasGrupoId && !hasNuevoGrupo) {
-        throw new ValidationError("Debe enviarse grupoId o nuevoGrupoNombre");
+      if (!hasGroupId && !hasNewGroupName) {
+        throw new ValidationError("Debe enviarse groupId o newGroupName");
       }
 
-      // --> Buscar datos del creador autenticado
-      const creator = await usuarioRepository.findById(creatorId);
-      if (!creator) {
+      const organizer = await userRepository.findById(organizerId);
+      if (!organizer) {
         throw new NotFoundError("Organizador no encontrado");
       }
 
-      // --> Caso grupo existente
-      if (hasGrupoId) {
-        const grupoId = dto.grupoId!.trim();
-        const grupo = await grupoRepository.findById(grupoId);
+      if (hasGroupId) {
+        const groupId = dto.groupId!.trim();
+        const group = await groupRepository.findById(groupId);
 
-        if (!grupo) {
+        if (!group) {
           throw new NotFoundError("El grupo especificado no existe");
         }
 
-        const isMember = grupo.miembros.some((m) => m.usuarioId === creatorId); // --> Busca alguno que cumpla con la condicion
+        const isMember = group.members.some((member) => member.userId === organizerId);
         if (!isMember) {
           throw new ForbiddenError("El organizador no pertenece al grupo especificado");
         }
 
-        const participantes = grupo.miembros.map((m) => ({
-          usuarioId: m.usuario.id,
-          username: m.usuario.nombre,
-          esOrganizador: m.usuario.id === creatorId,
-        }));
-
-        return eventoRepository.createAtomic({
-          nombre: dto.nombre.trim(),
-          textPlace: dto.textPlace?.trim(),
-          creatorId,
-          grupoId,
-          participantes,
+        return eventRepository.createAtomic({
+          name: dto.name.trim(),
+          location: dto.location.trim(),
+          organizerId,
+          groupId,
+          participants: group.members.map((member) => ({
+            userId: member.user.id,
+            username: member.user.username,
+            isOrganizer: member.user.id === organizerId,
+          })),
         });
       }
 
-      // --> Caso de nuevo grupo
-      const nuevoGrupoNombre = dto.nuevoGrupoNombre!.trim();
-      const rawIdentifiers = dto.memberIdentifiers ?? [];
+      const newGroupName = dto.newGroupName!.trim();
+      const resolvedUsers: User[] = [];
 
-      const resolvedUsers: Usuario[] = [];
-
-      for (const identifier of rawIdentifiers) {
-        // --> Busca que existan todos los usuarios en la db
+      for (const identifier of dto.memberIdentifiers ?? []) {
         const cleanIdentifier = identifier.trim();
         if (!cleanIdentifier) continue;
 
-        const user = await usuarioRepository.findPublicByIdentifier(cleanIdentifier);
+        const user = await userRepository.findPublicByIdentifier(cleanIdentifier);
         if (!user) {
           throw new NotFoundError(`Usuario no encontrado para el identificador: ${identifier}`);
         }
 
-        if (!resolvedUsers.some((u) => u.id === user.id)) {
+        if (!resolvedUsers.some((resolvedUser) => resolvedUser.id === user.id)) {
           resolvedUsers.push(user);
-        } // --> Agrega al creador aunque no se haya incluido
+        }
       }
 
-      // --> Garantizar que el organizador esté siempre incluido en el nuevo grupo
-      if (!resolvedUsers.some((u) => u.id === creator.id)) {
-        resolvedUsers.push(creator);
+      if (!resolvedUsers.some((user) => user.id === organizer.id)) {
+        resolvedUsers.push(organizer);
       }
 
-      const participantes = resolvedUsers.map((u) => ({
-        usuarioId: u.id,
-        username: u.nombre,
-        esOrganizador: u.id === creatorId,
-      }));
-
-      return eventoRepository.createAtomic({
-        nombre: dto.nombre.trim(),
-        textPlace: dto.textPlace?.trim(),
-        creatorId,
-        nuevoGrupo: {
-          nombre: nuevoGrupoNombre,
-          miembrosIds: resolvedUsers.map((u) => u.id),
+      return eventRepository.createAtomic({
+        name: dto.name.trim(),
+        location: dto.location.trim(),
+        organizerId,
+        newGroup: {
+          name: newGroupName,
+          memberIds: resolvedUsers.map((user) => user.id),
         },
-        participantes,
+        participants: resolvedUsers.map((user) => ({
+          userId: user.id,
+          username: user.username,
+          isOrganizer: user.id === organizerId,
+        })),
       });
     },
   };

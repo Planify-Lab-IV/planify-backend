@@ -26,7 +26,7 @@ describe("PasswordHasher", () => {
 describe("SessionTokenService", () => {
   const service = createSessionTokenService(TEST_SECRET);
 
-  it("devuelve el usuarioId desde un token firmado", () => {
+  it("returns the user ID from a signed token", () => {
     const token = service.sign("user-123");
     expect(service.verify(token)).toBe("user-123");
   });

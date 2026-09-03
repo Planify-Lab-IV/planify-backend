@@ -16,7 +16,7 @@ export function createAuthMiddleware(sessionTokenService: SessionTokenService) {
     const token = authHeader.slice("Bearer ".length); // --> Slicea bearer
 
     try {
-      req.usuarioId = sessionTokenService.verify(token); // --> Deja ID disponible, tipo declarado
+      req.userId = sessionTokenService.verify(token); // --> Deja ID disponible, tipo declarado
       return next();
     } catch {
       return next(new UnauthorizedError("Token invalido o expirado"));

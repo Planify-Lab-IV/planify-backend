@@ -3,6 +3,7 @@ import type { Request, Response, NextFunction } from "express";
 import type { EventService } from "../services/event.service.js";
 import { UnauthorizedError } from "../shared/errors/index.js";
 import { validateCreateEventDTO } from "../validators/event.validator.js";
+import { toEventResponseDTO } from "../dtos/event.response.dto.js";
 
 export interface EventController {
   create(req: Request, res: Response, next: NextFunction): Promise<void>;
@@ -12,15 +13,15 @@ export function createEventController(eventService: EventService): EventControll
   return {
     async create(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const creatorId = req.usuarioId;
-        if (!creatorId) {
+        const organizerId = req.userId;
+        if (!organizerId) {
           throw new UnauthorizedError("Usuario no autenticado");
         }
 
         const dto = validateCreateEventDTO(req.body);
-        const evento = await eventService.createEvent(creatorId, dto);
+        const event = await eventService.createEvent(organizerId, dto);
 
-        res.status(201).json(evento);
+        res.status(201).json(toEventResponseDTO(event));
       } catch (error) {
         next(error);
       }

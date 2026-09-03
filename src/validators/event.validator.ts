@@ -3,10 +3,10 @@ import { ValidationError } from "../shared/errors/index.js";
 
 export const createEventSchema = z
   .object({
-    nombre: z.string(),
-    textPlace: z.string().optional(),
-    grupoId: z.string().optional(),
-    nuevoGrupoNombre: z.string().optional(),
+    name: z.string(),
+    location: z.string().trim().min(1),
+    groupId: z.string().optional(),
+    newGroupName: z.string().optional(),
     memberIdentifiers: z.array(z.string()).optional(),
   })
   .strict();
