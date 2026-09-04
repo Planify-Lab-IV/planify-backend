@@ -25,15 +25,23 @@ export interface GroupWithMembers extends Group {
   members: GroupMemberWithUser[]; // --> Agrega la coleccion de miembros a un grupo
 }
 
+// Para tener la cantidad de miembros de un group
+export interface GroupSummary {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
 export interface GroupRepository {
   findById(id: string): Promise<GroupWithMembers | null>;
   isMember(groupId: string, userId: string): Promise<boolean>;
   create(data: { name: string }): Promise<Group>;
+  findByUserId(userId: string): Promise<GroupSummary[]>;
 }
 
 export const groupRepository: GroupRepository = {
-  // --> Busca un grupo por su ID e incluye la lista de miembros con sus datos canónicos de usuario. Retorna null si el grupo no existe.
-
+  // --> Busca un grupo por su ID e incluye la lista de miembros con sus datos canónicos de usuario.
+  // Retorna null si el grupo no existe.
   async findById(id: string): Promise<GroupWithMembers | null> {
     return await prisma.group.findUnique({
       where: { id },
@@ -83,5 +91,31 @@ export const groupRepository: GroupRepository = {
         name: true,
       },
     });
+  },
+
+  // --> Busca los grupos dado el usuario autenticado
+  async findByUserId(userId: string): Promise<GroupSummary[]> {
+    const memberships = await prisma.groupMember.findMany({
+      where: { userId },
+      select: {
+        group: {
+          select: {
+            id: true,
+            name: true,
+            _count: {
+              select: {
+                members: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return memberships.map(({ group }) => ({
+      id: group.id,
+      name: group.name,
+      memberCount: group._count.members,
+    }));
   },
 };

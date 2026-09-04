@@ -1,4 +1,4 @@
-import type { Event, EventStatus } from "../repositories/event.repository.js";
+import type { Event, EventStatus } from "../../repositories/event.repository.js";
 
 export interface EventParticipantResponseDTO {
   eventId: string;
