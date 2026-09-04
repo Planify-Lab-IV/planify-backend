@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ValidationError } from "../shared/errors/index.js";
+import { ValidationError } from "../../shared/errors/index.js";
 
 export const createEventSchema = z
   .object({

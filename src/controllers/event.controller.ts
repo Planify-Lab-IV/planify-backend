@@ -2,7 +2,7 @@
 import type { Request, Response, NextFunction } from "express";
 import type { EventService } from "../services/event.service.js";
 import { UnauthorizedError } from "../shared/errors/index.js";
-import { validateCreateEventDTO } from "../validators/event.validator.js";
+import { validateCreateEventDTO } from "../validators/event/event.validator.js";
 import { toEventResponseDTO } from "../dtos/event.response.dto.js";
 
 export interface EventController {
