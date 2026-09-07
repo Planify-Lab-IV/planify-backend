@@ -5,6 +5,7 @@ import {
   type InvitationRepository,
 } from "../repositories/invitation.repository.js";
 import {
+  EventUnavailableError,
   ForbiddenError,
   InvitationNotFoundError,
   InvitationUnavailableError,
@@ -59,6 +60,10 @@ export function createInvitationsService(
         throw new ValidationError("La fecha de vencimiento debe ser futura");
       }
 
+      if (event.status !== "active") {
+        throw new EventUnavailableError();
+      }
+
       // --> Intenta generar 3 veces el token si se detecta una colision en la DB
       for (let attempt = 0; attempt < MAX_TOKEN_GENERATION_ATTEMPTS; attempt += 1) {
         const token = generateToken();
@@ -99,6 +104,12 @@ export function createInvitationsService(
         invitation.status !== "active" ||
         (invitation.expiresAt !== null && invitation.expiresAt <= now())
       ) {
+        throw new InvitationUnavailableError();
+      }
+
+      const event = await eventRepository.findById(invitation.eventId);
+
+      if (!event || event.status !== "active") {
         throw new InvitationUnavailableError();
       }
 

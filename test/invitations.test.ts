@@ -113,6 +113,7 @@ describe("invitations", () => {
       expiresAt: null,
       status: "active",
     } as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(event as never);
 
     const response = await request(app).get(`/invitations/${validInvitationToken}`);
 
@@ -134,6 +135,10 @@ describe("invitations", () => {
     const response = await request(app).get(`/invitations/${validInvitationToken}`);
 
     expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "INVITATION_NOT_FOUND",
+      message: "Invitación no encontrada",
+    });
   });
 
   it("rejects an expired token", async () => {
@@ -148,6 +153,10 @@ describe("invitations", () => {
     const response = await request(app).get(`/invitations/${validInvitationToken}`);
 
     expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "INVITATION_UNAVAILABLE",
+      message: "Invitación no disponible",
+    });
   });
 
   it("rejects a cancelled token", async () => {
@@ -162,5 +171,95 @@ describe("invitations", () => {
     const response = await request(app).get(`/invitations/${validInvitationToken}`);
 
     expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "INVITATION_UNAVAILABLE",
+      message: "Invitación no disponible",
+    });
+  });
+
+  it("rejects creating invitations for a cancelled event", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValue({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/invitations`)
+      .set("Authorization", `Bearer ${organizerToken}`)
+      .send({});
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "EVENT_UNAVAILABLE",
+      message: "El evento no está disponible",
+    });
+    expect(prisma.invitation.create).not.toHaveBeenCalled();
+  });
+
+  it("retries token generation when the first token collides", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(event as never);
+
+    vi.mocked(prisma.invitation.create)
+      .mockRejectedValueOnce({ code: "P2002" })
+      .mockImplementationOnce(async (args) => {
+        const data = args.data as {
+          eventId: string;
+          uniqueToken: string;
+          expiresAt: Date | null;
+        };
+
+        return {
+          id: "invitation-2",
+          ...data,
+          status: "active",
+        } as never;
+      });
+
+    const response = await request(app)
+      .post(`/events/${eventId}/invitations`)
+      .set("Authorization", `Bearer ${organizerToken}`)
+      .send({});
+
+    expect(response.status).toBe(201);
+    expect(prisma.invitation.create).toHaveBeenCalledTimes(2);
+
+    const [firstCall, secondCall] = vi.mocked(prisma.invitation.create).mock.calls;
+
+    if (!firstCall || !secondCall) {
+      throw new Error("Se esperaban dos intentos de creación");
+    }
+
+    const firstToken = (firstCall[0].data as { uniqueToken: string }).uniqueToken;
+    const secondToken = (secondCall[0].data as { uniqueToken: string }).uniqueToken;
+
+    expect(firstToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(secondToken).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(secondToken).not.toBe(firstToken);
+    expect(response.body).toEqual({
+      invitationUrl: `planify://invite/${secondToken}`,
+    });
+  });
+
+  it("rejects an invitation whose event was cancelled", async () => {
+    vi.mocked(prisma.invitation.findUnique).mockResolvedValue({
+      id: "invitation-1",
+      eventId,
+      uniqueToken: validInvitationToken,
+      expiresAt: null,
+      status: "active",
+    } as never);
+
+    vi.mocked(prisma.event.findUnique).mockResolvedValue({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app).get(`/invitations/${validInvitationToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "INVITATION_UNAVAILABLE",
+      message: "Invitación no disponible",
+    });
   });
 });
