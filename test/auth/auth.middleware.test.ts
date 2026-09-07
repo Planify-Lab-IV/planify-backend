@@ -1,13 +1,13 @@
 // eslint-disable-next-line @typescript-eslint/triple-slash-reference
-/// <reference path="../src/types/express.d.ts" />
+/// <reference path="../../src/types/express.d.ts" />
 import { describe, it, expect } from "vitest";
 import request from "supertest";
 import express from "express";
 import jwt from "jsonwebtoken";
 import type { Request, Response } from "express";
-import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
-import { createAuthMiddleware } from "../src/shared/middlewares/auth.middleware.js";
-import { errorHandler } from "../src/shared/middlewares/error.middleware.js";
+import { createSessionTokenService } from "../../src/infrastructure/security/session.token.service.js";
+import { createAuthMiddleware } from "../../src/shared/middlewares/auth.middleware.js";
+import { errorHandler } from "../../src/shared/middlewares/error.middleware.js";
 
 const TEST_SECRET = "test-secret-que-cumple-con-los-32-caracteres";
 
@@ -54,5 +54,16 @@ describe("requireAuthenticatedUser", () => {
     const res = await request(makeApp()).get("/protegida").set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.userId).toBe("user-42");
+  });
+
+  it("devuelve 401 con un token de participante", async () => {
+    const token = createSessionTokenService(TEST_SECRET).signParticipant(
+      "participant-42",
+      "event-7",
+    );
+
+    const res = await request(makeApp()).get("/protegida").set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
   });
 });

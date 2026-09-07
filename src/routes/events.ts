@@ -8,6 +8,10 @@ import { groupRepository } from "../repositories/group.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { createAuthMiddleware } from "../shared/middlewares/auth.middleware.js";
 import { createSessionTokenService } from "../infrastructure/security/session.token.service.js";
+import { createParticipantController } from "../controllers/participant.controller.js";
+import { createParticipantService } from "../services/participant.service.js";
+import { participantRepository } from "../repositories/participant.repository.js";
+import { createPasswordHasher } from "../infrastructure/security/password.hasher.js";
 import { env } from "../shared/config/env.js";
 
 const router = Router();
@@ -20,5 +24,20 @@ const eventService = createEventService(eventRepository, groupRepository, userRe
 const eventController = createEventController(eventService);
 
 router.post("/events", requireAuth, (req, res, next) => eventController.create(req, res, next));
+
+const passwordHasher = createPasswordHasher();
+
+const participantService = createParticipantService(
+  eventRepository,
+  participantRepository,
+  passwordHasher,
+  sessionTokenService,
+);
+
+const participantController = createParticipantController(participantService);
+
+router.post("/events/:eventId/participants/anonymous", (req, res, next) =>
+  participantController.enterAnonymous(req, res, next),
+);
 
 export default router;

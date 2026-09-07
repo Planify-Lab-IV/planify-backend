@@ -2,7 +2,7 @@ import type { Event, EventRepository } from "../repositories/event.repository.js
 import type { GroupRepository } from "../repositories/group.repository.js";
 import type { UserRepository, User } from "../repositories/user.repository.js";
 import { ValidationError, NotFoundError, ForbiddenError } from "../shared/errors/index.js";
-import type { CreateEventDTO } from "../validators/event.validator.js";
+import type { CreateEventDTO } from "../validators/event/event.validator.js";
 
 export interface EventService {
   createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event>;
