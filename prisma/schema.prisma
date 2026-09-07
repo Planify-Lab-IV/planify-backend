@@ -58,8 +58,22 @@ model Event {
   group        Group              @relation(fields: [groupId], references: [id])
   organizer    User               @relation("EventOrganizer", fields: [organizerId], references: [id])
   participants EventParticipant[]
+  invitations Invitation[]
 
   @@map("evento")
+}
+
+model Invitation {
+  id          String    @id @default(uuid())
+  eventId     String    @map("evento_id")
+  uniqueToken String    @unique @map("token_unico")
+  expiresAt   DateTime? @map("expira_en")
+  status      String    @default("active") @map("estado")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("invitaciones")
 }
 
 model EventParticipant {
