@@ -55,4 +55,15 @@ describe("requireAuthenticatedUser", () => {
     expect(res.status).toBe(200);
     expect(res.body.userId).toBe("user-42");
   });
+
+  it("devuelve 401 con un token de participante", async () => {
+    const token = createSessionTokenService(TEST_SECRET).signParticipant(
+      "participant-42",
+      "event-7",
+    );
+
+    const res = await request(makeApp()).get("/protegida").set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+  });
 });

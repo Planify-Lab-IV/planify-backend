@@ -152,6 +152,28 @@ describe("POST /events/:eventId/participants/anonymous", () => {
     });
   });
 
+  it("resuelve como reingreso si otro request crea el participante al mismo tiempo", async () => {
+    const storedPinHash = bcrypt.hashSync(pin, 10);
+
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.eventParticipant.findUnique)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ ...createdParticipant, pinHash: storedPinHash } as never);
+    vi.mocked(prisma.eventParticipant.create).mockRejectedValueOnce({ code: "P2002" });
+
+    const response = await request(app).post(`/events/${eventId}/participants/anonymous`).send({
+      name: "Gil",
+      pin,
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      participant: createdParticipant,
+      token: expect.any(String),
+    });
+    expect(prisma.eventParticipant.findUnique).toHaveBeenCalledTimes(2);
+  });
+
   it("devuelve 401 cuando el participante existe pero el PIN no coincide", async () => {
     const storedPinHash = bcrypt.hashSync(pin, 10);
 

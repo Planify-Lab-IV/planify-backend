@@ -1,5 +1,12 @@
 import { prisma } from "../infrastructure/prisma.js";
 
+export class ParticipantAlreadyExistsError extends Error {
+  constructor() {
+    super("Ya existe un participante con ese nombre en el evento");
+    this.name = "ParticipantAlreadyExistsError";
+  } // --> Error interno, no tiene porque estar centralizado
+}
+
 export interface Participant {
   id: string;
   eventId: string;
@@ -70,22 +77,35 @@ export const participantRepository: ParticipantRepository = {
   },
 
   async createAnonymous({ eventId, username, pinHash }) {
-    return prisma.eventParticipant.create({
-      data: {
-        eventId,
-        username,
-        pinHash,
-        isAnonymous: true,
-        isOrganizer: false,
-      },
-      select: {
-        id: true,
-        eventId: true,
-        username: true,
-        isAnonymous: true,
-        // --> No exponemos el pinHash al crear un participante no registrado, no circula fuera de la
-        // operacion directa de crear
-      },
-    });
+    try {
+      return await prisma.eventParticipant.create({
+        data: {
+          eventId,
+          username,
+          pinHash,
+          isAnonymous: true,
+          isOrganizer: false,
+        },
+        select: {
+          id: true,
+          eventId: true,
+          username: true,
+          isAnonymous: true,
+          // --> No exponemos el pinHash al crear un participante no registrado, no circula fuera de la
+          // operacion directa de crear
+        },
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        throw new ParticipantAlreadyExistsError();
+      }
+
+      throw error;
+    }
   },
 };

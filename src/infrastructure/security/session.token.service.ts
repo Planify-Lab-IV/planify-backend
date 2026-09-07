@@ -21,20 +21,22 @@ export function createSessionTokenService(secret: string): SessionTokenService {
 
   return {
     sign(userId) {
-      return jwt.sign({ sub: userId }, secret, { expiresIn: EXPIRES_IN });
+      return jwt.sign({ sub: userId, sessionType: "user" }, secret, { expiresIn: EXPIRES_IN });
     },
 
     verify(token: string): string {
       const payload = jwt.verify(token, secret);
+
       if (
         typeof payload !== "object" ||
         payload === null ||
-        !("sub" in payload) ||
-        typeof payload.sub !== "string" || // --> Verifica tanto que payload sea un objeto valido como que el token sea de caracter sub
+        payload.sessionType !== "user" ||
+        typeof payload.sub !== "string" ||
         payload.sub.trim() === ""
       ) {
-        throw new Error("Token payload inválido: falta el claim sub");
+        throw new Error("Token de usuario inválido");
       }
+
       return payload.sub;
     },
 
