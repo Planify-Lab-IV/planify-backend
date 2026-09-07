@@ -13,6 +13,9 @@ import { createParticipantService } from "../services/participant.service.js";
 import { participantRepository } from "../repositories/participant.repository.js";
 import { createPasswordHasher } from "../infrastructure/security/password.hasher.js";
 import { env } from "../shared/config/env.js";
+import { invitationRepository } from "../repositories/invitation.repository.js";
+import { createInvitationsService } from "../services/invitations.service.js";
+import { createInvitationController } from "../controllers/invitation.controller.js";
 
 const router = Router();
 
@@ -24,6 +27,15 @@ const eventService = createEventService(eventRepository, groupRepository, userRe
 const eventController = createEventController(eventService);
 
 router.post("/events", requireAuth, (req, res, next) => eventController.create(req, res, next));
+
+const invitationsService = createInvitationsService(eventRepository, invitationRepository);
+const invitationController = createInvitationController(invitationsService);
+
+router.post("/events/:eventId/invitations", requireAuth, (req, res, next) =>
+  invitationController.create(req, res, next),
+);
+
+router.get("/invitations/:token", (req, res, next) => invitationController.resolve(req, res, next));
 
 const passwordHasher = createPasswordHasher();
 
