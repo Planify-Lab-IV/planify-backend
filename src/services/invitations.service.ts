@@ -4,7 +4,13 @@ import {
   InvitationTokenAlreadyExistsError,
   type InvitationRepository,
 } from "../repositories/invitation.repository.js";
-import { ForbiddenError, NotFoundError, ValidationError } from "../shared/errors/index.js";
+import {
+  ForbiddenError,
+  InvitationNotFoundError,
+  InvitationUnavailableError,
+  NotFoundError,
+  ValidationError,
+} from "../shared/errors/index.js";
 import type { CreateInvitationDTO } from "../validators/invitation/create.invitation.validator.js";
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
@@ -85,12 +91,15 @@ export function createInvitationsService(
 
       const invitation = await invitationRepository.findByUniqueToken(token);
 
+      if (!invitation) {
+        throw new InvitationNotFoundError();
+      }
+
       if (
-        !invitation ||
         invitation.status !== "active" ||
         (invitation.expiresAt !== null && invitation.expiresAt <= now())
       ) {
-        throw new NotFoundError("Invitación no encontrada");
+        throw new InvitationUnavailableError();
       }
 
       return {
