@@ -36,6 +36,7 @@ export function createInvitationsService(
   now: Clock = () => new Date(),
   generateToken: InvitationTokenGenerator = () => randomBytes(32).toString("base64url"),
 ): InvitationsService {
+  // --> Token de 32 bytes en un string base 64
   return {
     async createInvitation(requesterId, eventId, dto) {
       const event = await eventRepository.findById(eventId);
@@ -52,6 +53,7 @@ export function createInvitationsService(
         throw new ValidationError("La fecha de vencimiento debe ser futura");
       }
 
+      // --> Intenta generar 3 veces el token si se detecta una colision en la DB
       for (let attempt = 0; attempt < MAX_TOKEN_GENERATION_ATTEMPTS; attempt += 1) {
         const token = generateToken();
 
@@ -62,7 +64,9 @@ export function createInvitationsService(
             expiresAt: dto.expiresAt,
           });
 
-          return { invitationUrl: `planify://invite/${token}` };
+          return {
+            invitationUrl: `planify://invite/${token}`,
+          };
         } catch (error) {
           if (!(error instanceof InvitationTokenAlreadyExistsError)) {
             throw error;
@@ -74,6 +78,7 @@ export function createInvitationsService(
     },
 
     async resolveInvitationToken(token) {
+      // --> Si el token cumple el patron regex
       if (!TOKEN_PATTERN.test(token)) {
         throw new ValidationError("El token de invitación es inválido");
       }
@@ -88,7 +93,9 @@ export function createInvitationsService(
         throw new NotFoundError("Invitación no encontrada");
       }
 
-      return { eventId: invitation.eventId };
+      return {
+        eventId: invitation.eventId,
+      };
     },
   };
 }

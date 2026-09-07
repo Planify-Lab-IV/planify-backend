@@ -28,6 +28,8 @@ const eventController = createEventController(eventService);
 
 router.post("/events", requireAuth, (req, res, next) => eventController.create(req, res, next));
 
+// INVITATIONS
+
 const invitationsService = createInvitationsService(eventRepository, invitationRepository);
 const invitationController = createInvitationController(invitationsService);
 
@@ -36,6 +38,8 @@ router.post("/events/:eventId/invitations", requireAuth, (req, res, next) =>
 );
 
 router.get("/invitations/:token", (req, res, next) => invitationController.resolve(req, res, next));
+
+// PARTICIPANT
 
 const passwordHasher = createPasswordHasher();
 
