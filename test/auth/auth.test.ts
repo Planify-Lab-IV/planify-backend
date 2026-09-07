@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
-import app from "../src/app.js";
-import { prisma } from "../src/infrastructure/prisma.js";
+import app from "../../src/app.js";
+import { prisma } from "../../src/infrastructure/prisma.js";
 import bcrypt from "bcrypt";
 
-vi.mock("../src/infrastructure/prisma.js", () => ({
+vi.mock("../../src/infrastructure/prisma.js", () => ({
   prisma: {
     user: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn() },
     $queryRaw: vi.fn(),

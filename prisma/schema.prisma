@@ -69,10 +69,12 @@ model EventParticipant {
   username    String
   isAnonymous Boolean @default(false) @map("es_anonimo")
   isOrganizer Boolean @default(false) @map("es_organizador")
+  pinHash     String? @map("pin_hash")
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  @@unique([eventId, username])
   @@index([eventId])
   @@index([userId])
   @@map("participante")

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
-import jwt from "jsonwebtoken";
+import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
@@ -18,7 +18,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
 
 describe("POST /events", () => {
   const organizerId = "user-organizer-1";
-  const validToken = jwt.sign({ sub: organizerId }, env.JWT_SECRET);
+  const validToken = createSessionTokenService(env.JWT_SECRET).sign(organizerId);
   const organizer = {
     id: organizerId,
     name: "Organizer",
