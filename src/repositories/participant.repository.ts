@@ -1,4 +1,5 @@
 import { prisma } from "../infrastructure/prisma.js";
+import type { AttendanceState } from "@prisma/client";
 
 export class ParticipantAlreadyExistsError extends Error {
   constructor() {
@@ -19,6 +20,17 @@ export interface ParticipantWithPinHash extends Participant {
   pinHash: string | null;
 }
 
+// --> Proyeccion especifica para el flujo de asistencia
+export interface AttendanceParticipant {
+  id: string;
+  eventId: string;
+  userId: string | null;
+  username: string;
+  isAnonymous: boolean;
+  isOrganizer: boolean;
+  attendanceState: AttendanceState;
+}
+
 export interface ParticipantRepository {
   findById(id: string): Promise<Participant | null>;
 
@@ -29,11 +41,15 @@ export interface ParticipantRepository {
     username: string,
   ): Promise<ParticipantWithPinHash | null>;
 
+  findAttendanceById(id: string): Promise<AttendanceParticipant | null>;
+
   createAnonymous(data: {
     eventId: string;
     username: string;
     pinHash: string;
   }): Promise<Participant>;
+
+  updateAttendance(id: string, state: AttendanceState): Promise<AttendanceParticipant>;
 
   invalidateAnonymousSessions(eventId: string): Promise<void>;
 }
@@ -78,6 +94,21 @@ export const participantRepository: ParticipantRepository = {
     });
   },
 
+  async findAttendanceById(id) {
+    return prisma.eventParticipant.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
+      },
+    });
+  },
+
   async createAnonymous({ eventId, username, pinHash }) {
     try {
       return await prisma.eventParticipant.create({
@@ -109,6 +140,22 @@ export const participantRepository: ParticipantRepository = {
 
       throw error;
     }
+  },
+
+  async updateAttendance(id, state) {
+    return prisma.eventParticipant.update({
+      where: { id },
+      data: { attendanceState: state },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
+      },
+    });
   },
 
   async invalidateAnonymousSessions(eventId) {

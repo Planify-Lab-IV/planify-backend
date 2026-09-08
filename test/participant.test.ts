@@ -16,6 +16,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     eventParticipant: {
       findUnique: vi.fn(),
       create: vi.fn(),
+      update: vi.fn(),
       updateMany: vi.fn(),
     },
     $queryRaw: vi.fn(),
@@ -338,6 +339,71 @@ describe("ParticipantRepository.invalidateAnonymousSessions", () => {
       },
       data: {
         pinHash: null,
+      },
+    });
+  });
+});
+
+describe("ParticipantRepository attendance operations", () => {
+  const attendanceParticipant = {
+    id: "participant-1",
+    eventId: "event-1",
+    userId: "user-1",
+    username: "Gil",
+    isAnonymous: false,
+    isOrganizer: false,
+    attendanceState: "not_confirmed",
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("busca la proyección necesaria para autorizar una respuesta de asistencia", async () => {
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(
+      attendanceParticipant as never,
+    );
+
+    await expect(participantRepository.findAttendanceById("participant-1")).resolves.toEqual(
+      attendanceParticipant,
+    );
+
+    expect(prisma.eventParticipant.findUnique).toHaveBeenCalledWith({
+      where: { id: "participant-1" },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
+      },
+    });
+  });
+
+  it("actualiza únicamente el estado de asistencia y devuelve la proyección pública", async () => {
+    const updatedParticipant = {
+      ...attendanceParticipant,
+      attendanceState: "confirmed",
+    };
+    vi.mocked(prisma.eventParticipant.update).mockResolvedValueOnce(updatedParticipant as never);
+
+    await expect(
+      participantRepository.updateAttendance("participant-1", "confirmed"),
+    ).resolves.toEqual(updatedParticipant);
+
+    expect(prisma.eventParticipant.update).toHaveBeenCalledWith({
+      where: { id: "participant-1" },
+      data: { attendanceState: "confirmed" },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
       },
     });
   });
