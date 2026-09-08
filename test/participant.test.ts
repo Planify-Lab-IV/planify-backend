@@ -6,6 +6,7 @@ import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
 import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 import { env } from "../src/shared/config/env.js";
+import { participantRepository } from "../src/repositories/participant.repository.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
@@ -15,6 +16,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     eventParticipant: {
       findUnique: vi.fn(),
       create: vi.fn(),
+      updateMany: vi.fn(),
     },
     $queryRaw: vi.fn(),
   },
@@ -296,5 +298,27 @@ describe("POST /events/:eventId/participants/anonymous", () => {
     expect(prisma.event.findUnique).not.toHaveBeenCalled();
     expect(prisma.eventParticipant.findUnique).not.toHaveBeenCalled();
     expect(prisma.eventParticipant.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("ParticipantRepository.invalidateAnonymousSessions", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("anula los PIN de todos los participantes anónimos del evento", async () => {
+    vi.mocked(prisma.eventParticipant.updateMany).mockResolvedValueOnce({ count: 2 } as never);
+
+    await participantRepository.invalidateAnonymousSessions("event-1");
+
+    expect(prisma.eventParticipant.updateMany).toHaveBeenCalledWith({
+      where: {
+        eventId: "event-1",
+        isAnonymous: true,
+      },
+      data: {
+        pinHash: null,
+      },
+    });
   });
 });
