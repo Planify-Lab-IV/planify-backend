@@ -23,7 +23,12 @@ const router = Router();
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
 const requireAuth = createAuthMiddleware(sessionTokenService);
 
-const eventService = createEventService(eventRepository, groupRepository, userRepository);
+const eventService = createEventService(
+  eventRepository,
+  groupRepository,
+  userRepository,
+  participantRepository,
+);
 const eventController = createEventController(eventService);
 
 router.post("/events", requireAuth, (req, res, next) => eventController.create(req, res, next));
