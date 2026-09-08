@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import jwt from "jsonwebtoken";
+import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 import request from "supertest";
 import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
@@ -15,7 +15,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
 
 describe("GET /me/groups", () => {
   const authenticatedUserId = "user-1";
-  const validToken = jwt.sign({ sub: authenticatedUserId }, env.JWT_SECRET);
+  const validToken = createSessionTokenService(env.JWT_SECRET).sign(authenticatedUserId);
 
   beforeEach(() => {
     vi.clearAllMocks();
