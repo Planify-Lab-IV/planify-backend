@@ -42,3 +42,24 @@ export class ForbiddenError extends AppError {
     super(message, 403, "FORBIDDEN");
   }
 }
+
+export class InvitationNotFoundError extends NotFoundError {
+  constructor() {
+    super("Invitación no encontrada", "INVITATION_NOT_FOUND");
+    this.name = "InvitationNotFoundError";
+  }
+}
+
+export class InvitationUnavailableError extends NotFoundError {
+  constructor() {
+    super("Invitación no disponible", "INVITATION_UNAVAILABLE");
+    this.name = "InvitationUnavailableError";
+  }
+}
+
+export class EventUnavailableError extends AppError {
+  constructor() {
+    super("El evento no está disponible", 409, "EVENT_UNAVAILABLE");
+    this.name = "EventUnavailableError";
+  }
+}
