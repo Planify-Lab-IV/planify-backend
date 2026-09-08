@@ -8,7 +8,7 @@ import type { EventRepository } from "../repositories/event.repository.js";
 import type { PasswordHasher } from "../infrastructure/security/password.hasher.js";
 import type { SessionTokenService } from "../infrastructure/security/session.token.service.js";
 import type { AnonymousParticipantDTO } from "../validators/participant/anonimous.participant.validator.js";
-import { NotFoundError, UnauthorizedError } from "../shared/errors/index.js";
+import { EventUnavailableError, NotFoundError, UnauthorizedError } from "../shared/errors/index.js";
 
 export interface AnonymousParticipantSession {
   participant: Participant;
@@ -63,6 +63,11 @@ export function createParticipantService(
 
       if (!event) {
         throw new NotFoundError("Evento no encontrado");
+      }
+
+      if (event.status !== "active") {
+        // --> El evento debe estar activo para poder ingresar
+        throw new EventUnavailableError(); // --> 409
       }
 
       const username = dto.name;

@@ -220,6 +220,26 @@ describe("POST /events/:eventId/participants/anonymous", () => {
     expect(prisma.eventParticipant.create).not.toHaveBeenCalled();
   });
 
+  it("rechaza el ingreso anónimo si el evento está cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app).post(`/events/${eventId}/participants/anonymous`).send({
+      name: "Gil",
+      pin,
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "EVENT_UNAVAILABLE",
+      message: "El evento no está disponible",
+    });
+    expect(prisma.eventParticipant.findUnique).not.toHaveBeenCalled();
+    expect(prisma.eventParticipant.create).not.toHaveBeenCalled();
+  });
+
   it("permite el mismo nombre en eventos distintos", async () => {
     vi.mocked(prisma.event.findUnique)
       .mockResolvedValueOnce(event as never)
