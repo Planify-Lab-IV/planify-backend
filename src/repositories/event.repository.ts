@@ -51,6 +51,7 @@ export interface CreateEventParams {
 export interface EventRepository {
   findById(id: string): Promise<Event | null>;
   createAtomic(params: CreateEventParams): Promise<Event>;
+  cancelAtomic(id: string): Promise<Event>;
 }
 
 export const eventRepository: EventRepository = {
@@ -99,6 +100,29 @@ export const eventRepository: EventRepository = {
           },
         },
         include: { participants: true },
+      });
+
+      // trae las propiedades del evento (...event), y sobreescribe el status con una version validada
+      return { ...event, status: parseEventStatus(event.status) };
+    });
+  },
+
+  async cancelAtomic(id: string): Promise<Event> {
+    return prisma.$transaction(async (tx) => {
+      const event = await tx.event.update({
+        where: { id },
+        data: { status: "cancelled" },
+        include: { participants: true },
+      });
+
+      await tx.eventParticipant.updateMany({
+        where: {
+          eventId: id,
+          isAnonymous: true,
+        },
+        data: {
+          pinHash: null,
+        },
       });
 
       return { ...event, status: parseEventStatus(event.status) };

@@ -6,6 +6,7 @@ import type { CreateEventDTO } from "../validators/event/event.validator.js";
 
 export interface EventService {
   createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event>;
+  cancel(userId: string, eventId: string): Promise<Event>;
 }
 
 export function createEventService(
@@ -95,6 +96,28 @@ export function createEventService(
           isOrganizer: user.id === organizerId,
         })),
       });
+    },
+
+    async cancel(userId: string, eventId: string): Promise<Event> {
+      const event = await eventRepository.findById(eventId);
+
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      const isOrganizer = event.participants.some(
+        (participant) => participant.userId === userId && participant.isOrganizer,
+      );
+
+      if (!isOrganizer) {
+        throw new ForbiddenError("Solo el organizador puede cancelar el evento");
+      }
+
+      if (event.status === "cancelled") {
+        return event;
+      }
+
+      return eventRepository.cancelAtomic(eventId);
     },
   };
 }

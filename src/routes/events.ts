@@ -28,6 +28,10 @@ const eventController = createEventController(eventService);
 
 router.post("/events", requireAuth, (req, res, next) => eventController.create(req, res, next));
 
+router.put("/events/:id/cancel", requireAuth, (req, res, next) =>
+  eventController.cancel(req, res, next),
+);
+
 // INVITATIONS
 
 const invitationsService = createInvitationsService(eventRepository, invitationRepository);

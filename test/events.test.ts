@@ -4,13 +4,15 @@ import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
 import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 import { env } from "../src/shared/config/env.js";
+import { eventRepository } from "../src/repositories/event.repository.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     user: { findUnique: vi.fn(), findFirst: vi.fn() },
     group: { findUnique: vi.fn(), create: vi.fn() },
     groupMember: { findUnique: vi.fn() },
-    event: { create: vi.fn(), findUnique: vi.fn() },
+    event: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    eventParticipant: { updateMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
   },
@@ -156,5 +158,138 @@ describe("POST /events", () => {
     expect(prisma.user.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({ where: { OR: [{ email: "ana" }, { username: "ana" }] } }),
     );
+  });
+});
+
+describe("EventRepository.cancelAtomic", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("cancela el evento e invalida las credenciales anónimas en una transacción", async () => {
+    const cancelledEvent = {
+      id: "event-1",
+      name: "Birthday",
+      location: "Ana's house",
+      groupId: "group-1",
+      organizerId: "user-organizer-1",
+      status: "cancelled",
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-02T00:00:00Z"),
+      participants: [],
+    };
+    const updateEvent = vi.fn().mockResolvedValue(cancelledEvent);
+    const invalidateSessions = vi.fn().mockResolvedValue({ count: 2 });
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) =>
+      callback({
+        event: { update: updateEvent },
+        eventParticipant: { updateMany: invalidateSessions },
+      })) as never);
+
+    await expect(eventRepository.cancelAtomic("event-1")).resolves.toMatchObject({
+      id: "event-1",
+      status: "cancelled",
+    });
+
+    expect(updateEvent).toHaveBeenCalledWith({
+      where: { id: "event-1" },
+      data: { status: "cancelled" },
+      include: { participants: true },
+    });
+    expect(invalidateSessions).toHaveBeenCalledWith({
+      where: { eventId: "event-1", isAnonymous: true },
+      data: { pinHash: null },
+    });
+  });
+});
+
+describe("PUT /events/:id/cancel", () => {
+  const organizerId = "user-organizer-1";
+  const organizerToken = createSessionTokenService(env.JWT_SECRET).sign(organizerId);
+  const event = {
+    id: "event-1",
+    name: "Birthday",
+    location: "Ana's house",
+    groupId: "group-1",
+    organizerId,
+    status: "active",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    participants: [
+      {
+        id: "participant-organizer",
+        eventId: "event-1",
+        userId: organizerId,
+        username: "organizer",
+        isAnonymous: false,
+        isOrganizer: true,
+      },
+    ],
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("requiere autenticación", async () => {
+    const response = await request(app).put(`/events/${event.id}/cancel`);
+
+    expect(response.status).toBe(401);
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("permite al organizador cancelar y devuelve el evento actualizado", async () => {
+    const cancelledEvent = { ...event, status: "cancelled" };
+    const updateEvent = vi.fn().mockResolvedValue(cancelledEvent);
+    const invalidateSessions = vi.fn().mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) =>
+      callback({
+        event: { update: updateEvent },
+        eventParticipant: { updateMany: invalidateSessions },
+      })) as never);
+
+    const response = await request(app)
+      .put(`/events/${event.id}/cancel`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ id: event.id, status: "cancelled" });
+    expect(invalidateSessions).toHaveBeenCalledWith({
+      where: { eventId: event.id, isAnonymous: true },
+      data: { pinHash: null },
+    });
+  });
+
+  it("devuelve 403 si quien llama no es el participante organizador", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      participants: [
+        {
+          ...event.participants[0],
+          userId: "user-member",
+          isOrganizer: false,
+        },
+      ],
+    } as never);
+
+    const response = await request(app)
+      .put(`/events/${event.id}/cancel`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .put("/events/event-inexistente/cancel")
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(404);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });
