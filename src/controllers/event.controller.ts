@@ -17,13 +17,9 @@ export function createEventController(eventService: EventService): EventControll
   return {
     async answerAttendance(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const eventId = req.params.id;
-        const participantId = req.params.participantId;
+        const eventId = req.params.eventId;
         if (typeof eventId !== "string" || eventId.trim() === "") {
           throw new ValidationError("El eventId es requerido");
-        }
-        if (typeof participantId !== "string" || participantId.trim() === "") {
-          throw new ValidationError("El participantId es requerido");
         }
 
         const actor = req.attendanceActor;
@@ -32,12 +28,7 @@ export function createEventController(eventService: EventService): EventControll
         }
 
         const dto = validateAttendanceResponseDTO(req.body);
-        const participant = await eventService.answerAttendance(
-          eventId,
-          participantId,
-          dto.state,
-          actor,
-        );
+        const participant = await eventService.answerAttendance(eventId, actor, dto.state);
         res.status(200).json(toParticipantResponseDTO(participant));
       } catch (error) {
         next(error);

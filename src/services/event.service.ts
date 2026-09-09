@@ -19,9 +19,8 @@ export interface EventService {
   cancel(userId: string, eventId: string): Promise<Event>;
   answerAttendance(
     eventId: string,
-    participantId: string,
-    state: unknown,
     actor: AttendanceActor,
+    state: unknown,
   ): Promise<AttendanceParticipant>;
 }
 
@@ -137,7 +136,7 @@ export function createEventService(
       return eventRepository.cancelAtomic(eventId);
     },
 
-    async answerAttendance(eventId, participantId, state, actor) {
+    async answerAttendance(eventId, actor, state) {
       if (state !== "confirmed" && state !== "rejected") {
         throw new ValidationError("El estado de asistencia es inválido");
       }
@@ -151,22 +150,20 @@ export function createEventService(
         throw new EventUnavailableError();
       }
 
-      const participant = await participantRepository.findAttendanceById(participantId);
-      if (!participant || participant.eventId !== eventId) {
+      const participant =
+        actor.type === "user"
+          ? await participantRepository.findAttendanceByEventIdAndUserId(eventId, actor.userId)
+          : await participantRepository.findAttendanceById(actor.participantId);
+
+      if (
+        !participant ||
+        participant.eventId !== eventId ||
+        (actor.type === "anonymousParticipant" &&
+          (!participant.isAnonymous || actor.eventId !== eventId))
+      ) {
         throw new NotFoundError("Participante no encontrado");
       }
-
-      const isAuthorized =
-        actor.type === "user"
-          ? participant.userId === actor.userId
-          : participant.isAnonymous &&
-            participant.id === actor.participantId &&
-            participant.eventId === actor.eventId;
-
-      if (!isAuthorized) {
-        throw new ForbiddenError("Solo podés responder tu propia asistencia");
-      }
-      return await participantRepository.updateAttendance(participantId, state);
+      return await participantRepository.updateAttendance(participant.id, state);
     },
   };
 }

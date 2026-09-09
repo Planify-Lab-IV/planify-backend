@@ -77,6 +77,7 @@ const unusedParticipantRepository: ParticipantRepository = {
   findByEventId: vi.fn(),
   findByEventIdAndUsername: vi.fn(),
   findAttendanceById: vi.fn(),
+  findAttendanceByEventIdAndUserId: vi.fn(),
   createAnonymous: vi.fn(),
   updateAttendance: vi.fn(),
   invalidateAnonymousSessions: vi.fn(),
@@ -181,6 +182,13 @@ function createInMemoryParticipantRepository(
     findByEventId: vi.fn(),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(async (id) => records.get(id) ?? null),
+    findAttendanceByEventIdAndUserId: vi.fn(async (eventId, userId) => {
+      return (
+        [...records.values()].find(
+          (participant) => participant.eventId === eventId && participant.userId === userId,
+        ) ?? null
+      );
+    }),
     createAnonymous: vi.fn(),
     updateAttendance: vi.fn(async (id, state) => {
       const participant = records.get(id);
@@ -217,10 +225,14 @@ describe("EventService.answerAttendance", () => {
     const { service, participantRepository } = makeService();
 
     await expect(
-      service.answerAttendance("event-1", "participant-1", "confirmed", {
-        type: "user",
-        userId: "user-1",
-      }),
+      service.answerAttendance(
+        "event-1",
+        {
+          type: "user",
+          userId: "user-1",
+        },
+        "confirmed",
+      ),
     ).resolves.toMatchObject({ attendanceState: "confirmed" });
 
     expect(participantRepository.updateAttendance).toHaveBeenCalledWith(
@@ -238,11 +250,15 @@ describe("EventService.answerAttendance", () => {
     const { service, participantRepository } = makeService(makeEvent(), [anonymousParticipant]);
 
     await expect(
-      service.answerAttendance("event-1", "participant-anonymous", "rejected", {
-        type: "anonymousParticipant",
-        participantId: "participant-anonymous",
-        eventId: "event-1",
-      }),
+      service.answerAttendance(
+        "event-1",
+        {
+          type: "anonymousParticipant",
+          participantId: "participant-anonymous",
+          eventId: "event-1",
+        },
+        "rejected",
+      ),
     ).resolves.toMatchObject({ attendanceState: "rejected" });
 
     expect(participantRepository.updateAttendance).toHaveBeenCalledWith(
@@ -257,10 +273,14 @@ describe("EventService.answerAttendance", () => {
       const { service, participantRepository } = makeService();
 
       await expect(
-        service.answerAttendance("event-1", "participant-1", state, {
-          type: "user",
-          userId: "user-1",
-        }),
+        service.answerAttendance(
+          "event-1",
+          {
+            type: "user",
+            userId: "user-1",
+          },
+          state,
+        ),
       ).rejects.toBeInstanceOf(ValidationError);
       expect(participantRepository.findAttendanceById).not.toHaveBeenCalled();
       expect(participantRepository.updateAttendance).not.toHaveBeenCalled();
@@ -271,10 +291,14 @@ describe("EventService.answerAttendance", () => {
     const { service, participantRepository } = makeService(null);
 
     await expect(
-      service.answerAttendance("event-unknown", "participant-1", "confirmed", {
-        type: "user",
-        userId: "user-1",
-      }),
+      service.answerAttendance(
+        "event-unknown",
+        {
+          type: "user",
+          userId: "user-1",
+        },
+        "confirmed",
+      ),
     ).rejects.toBeInstanceOf(NotFoundError);
     expect(participantRepository.findAttendanceById).not.toHaveBeenCalled();
   });
@@ -283,10 +307,14 @@ describe("EventService.answerAttendance", () => {
     const { service, participantRepository } = makeService(makeEvent({ status: "cancelled" }));
 
     await expect(
-      service.answerAttendance("event-1", "participant-1", "confirmed", {
-        type: "user",
-        userId: "user-1",
-      }),
+      service.answerAttendance(
+        "event-1",
+        {
+          type: "user",
+          userId: "user-1",
+        },
+        "confirmed",
+      ),
     ).rejects.toBeInstanceOf(EventUnavailableError);
     expect(participantRepository.findAttendanceById).not.toHaveBeenCalled();
   });
@@ -297,23 +325,31 @@ describe("EventService.answerAttendance", () => {
     ]);
 
     await expect(
-      service.answerAttendance("event-1", "participant-1", "confirmed", {
-        type: "user",
-        userId: "user-1",
-      }),
+      service.answerAttendance(
+        "event-1",
+        {
+          type: "user",
+          userId: "user-1",
+        },
+        "confirmed",
+      ),
     ).rejects.toBeInstanceOf(NotFoundError);
     expect(participantRepository.updateAttendance).not.toHaveBeenCalled();
   });
 
-  it("impide que un usuario responda por otro participante", async () => {
+  it("devuelve 404 si el usuario no participa del evento", async () => {
     const { service, participantRepository } = makeService();
 
     await expect(
-      service.answerAttendance("event-1", "participant-1", "confirmed", {
-        type: "user",
-        userId: "user-2",
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
+      service.answerAttendance(
+        "event-1",
+        {
+          type: "user",
+          userId: "user-2",
+        },
+        "confirmed",
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError);
     expect(participantRepository.updateAttendance).not.toHaveBeenCalled();
   });
 
@@ -326,12 +362,16 @@ describe("EventService.answerAttendance", () => {
     const { service, participantRepository } = makeService(makeEvent(), [anonymousParticipant]);
 
     await expect(
-      service.answerAttendance("event-1", "participant-anonymous", "confirmed", {
-        type: "anonymousParticipant",
-        participantId: "participant-other",
-        eventId: "event-1",
-      }),
-    ).rejects.toBeInstanceOf(ForbiddenError);
+      service.answerAttendance(
+        "event-1",
+        {
+          type: "anonymousParticipant",
+          participantId: "participant-other",
+          eventId: "event-1",
+        },
+        "confirmed",
+      ),
+    ).rejects.toBeInstanceOf(NotFoundError);
     expect(participantRepository.updateAttendance).not.toHaveBeenCalled();
   });
 });

@@ -12,7 +12,12 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     group: { findUnique: vi.fn(), create: vi.fn() },
     groupMember: { findUnique: vi.fn() },
     event: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
-    eventParticipant: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    eventParticipant: {
+      findUnique: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
+      updateMany: vi.fn(),
+    },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
   },
@@ -294,7 +299,7 @@ describe("PUT /events/:id/cancel", () => {
   });
 });
 
-describe("PUT /events/:id/participants/:participantId/attendance", () => {
+describe("PUT /events/:eventId/participants/me/attendance", () => {
   const eventId = "event-1";
   const participantId = "participant-1";
   const userId = "user-1";
@@ -325,11 +330,11 @@ describe("PUT /events/:id/participants/:participantId/attendance", () => {
   it("permite a un usuario confirmar su propia asistencia", async () => {
     const updatedParticipant = { ...participant, attendanceState: "confirmed" };
     vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
-    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(participant as never);
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(participant as never);
     vi.mocked(prisma.eventParticipant.update).mockResolvedValueOnce(updatedParticipant as never);
 
     const response = await request(app)
-      .put(`/events/${eventId}/participants/${participantId}/attendance`)
+      .put(`/events/${eventId}/participants/me/attendance`)
       .set("Authorization", `Bearer ${userToken}`)
       .send({ state: "confirmed" });
 
@@ -360,17 +365,15 @@ describe("PUT /events/:id/participants/:participantId/attendance", () => {
       anonymousParticipant.id,
       eventId,
     );
-    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
-    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(
-      anonymousParticipant as never,
-    );
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(event as never);
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
     vi.mocked(prisma.eventParticipant.update).mockResolvedValueOnce({
       ...anonymousParticipant,
       attendanceState: "rejected",
     } as never);
 
     const response = await request(app)
-      .put(`/events/${eventId}/participants/${anonymousParticipant.id}/attendance`)
+      .put(`/events/${eventId}/participants/me/attendance`)
       .set("Authorization", `Bearer ${anonymousToken}`)
       .send({ state: "rejected" });
 
@@ -385,7 +388,7 @@ describe("PUT /events/:id/participants/:participantId/attendance", () => {
     { state: "confirmed", extra: true },
   ])("devuelve 400 para un body inválido: %o", async (body) => {
     const response = await request(app)
-      .put(`/events/${eventId}/participants/${participantId}/attendance`)
+      .put(`/events/${eventId}/participants/me/attendance`)
       .set("Authorization", `Bearer ${userToken}`)
       .send(body);
 
@@ -397,22 +400,19 @@ describe("PUT /events/:id/participants/:participantId/attendance", () => {
 
   it("requiere autenticación", async () => {
     const response = await request(app)
-      .put(`/events/${eventId}/participants/${participantId}/attendance`)
+      .put(`/events/${eventId}/participants/me/attendance`)
       .send({ state: "confirmed" });
 
     expect(response.status).toBe(401);
     expect(prisma.event.findUnique).not.toHaveBeenCalled();
   });
 
-  it("devuelve 404 si el participante pertenece a otro evento", async () => {
+  it("devuelve 404 si el usuario no participa del evento", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
-    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce({
-      ...participant,
-      eventId: "event-2",
-    } as never);
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(null);
 
     const response = await request(app)
-      .put(`/events/${eventId}/participants/${participantId}/attendance`)
+      .put(`/events/${eventId}/participants/me/attendance`)
       .set("Authorization", `Bearer ${userToken}`)
       .send({ state: "confirmed" });
 
@@ -420,17 +420,17 @@ describe("PUT /events/:id/participants/:participantId/attendance", () => {
     expect(prisma.eventParticipant.update).not.toHaveBeenCalled();
   });
 
-  it("devuelve 403 si un usuario intenta responder por otra persona", async () => {
+  it("devuelve 404 si otro usuario no participa del evento", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
-    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(participant as never);
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(null);
     const otherUserToken = createSessionTokenService(env.JWT_SECRET).sign("user-2");
 
     const response = await request(app)
-      .put(`/events/${eventId}/participants/${participantId}/attendance`)
+      .put(`/events/${eventId}/participants/me/attendance`)
       .set("Authorization", `Bearer ${otherUserToken}`)
       .send({ state: "confirmed" });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(404);
     expect(prisma.eventParticipant.update).not.toHaveBeenCalled();
   });
 
@@ -441,7 +441,7 @@ describe("PUT /events/:id/participants/:participantId/attendance", () => {
     } as never);
 
     const response = await request(app)
-      .put(`/events/${eventId}/participants/${participantId}/attendance`)
+      .put(`/events/${eventId}/participants/me/attendance`)
       .set("Authorization", `Bearer ${userToken}`)
       .send({ state: "confirmed" });
 

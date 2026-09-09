@@ -43,6 +43,11 @@ export interface ParticipantRepository {
 
   findAttendanceById(id: string): Promise<AttendanceParticipant | null>;
 
+  findAttendanceByEventIdAndUserId(
+    eventId: string,
+    userId: string,
+  ): Promise<AttendanceParticipant | null>;
+
   createAnonymous(data: {
     eventId: string;
     username: string;
@@ -95,6 +100,21 @@ export const participantRepository: ParticipantRepository = {
   async findAttendanceById(id) {
     return prisma.eventParticipant.findUnique({
       where: { id },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
+      },
+    });
+  },
+
+  async findAttendanceByEventIdAndUserId(eventId, userId) {
+    return prisma.eventParticipant.findFirst({
+      where: { eventId, userId },
       select: {
         id: true,
         eventId: true,
