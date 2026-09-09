@@ -1,4 +1,4 @@
-import type { AttendanceActor } from "../shared/middlewares/attendance.auth.middleware.js";
+import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 
 declare global {
   namespace Express {
