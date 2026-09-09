@@ -23,7 +23,11 @@ const router = Router();
 // -_> Inyección de dependencias
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
 const requireAuth = createAuthMiddleware(sessionTokenService);
-const requireAttendanceAuth = createAttendanceAuthMiddleware(sessionTokenService);
+const requireAttendanceAuth = createAttendanceAuthMiddleware(
+  sessionTokenService,
+  participantRepository,
+  eventRepository,
+);
 
 const eventService = createEventService(
   eventRepository,
@@ -39,10 +43,8 @@ router.put("/events/:id/cancel", requireAuth, (req, res, next) =>
   eventController.cancel(req, res, next),
 );
 
-router.put(
-  "/events/:id/participants/:participantId/attendance",
-  requireAttendanceAuth,
-  (req, res, next) => eventController.answerAttendance(req, res, next),
+router.put("/events/:eventId/participants/me/attendance", requireAttendanceAuth, (req, res, next) =>
+  eventController.answerAttendance(req, res, next),
 );
 
 // INVITATIONS

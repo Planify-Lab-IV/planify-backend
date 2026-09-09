@@ -3,6 +3,7 @@ import type { SessionTokenService } from "../../infrastructure/security/session.
 import type { EventRepository } from "../../repositories/event.repository.js";
 import type { ParticipantRepository } from "../../repositories/participant.repository.js";
 import { UnauthorizedError } from "../errors/index.js";
+import { validateAnonymousParticipantSession } from "../auth/anonymous.participant.session.validator.js";
 
 // protege rutas que en el futuro sean exclusivas de participantes anonimos
 // verifica que el jwt corresponda a "este" participante y evento, y siga vigente
@@ -24,27 +25,18 @@ export function createParticipantAuthMiddleware(
       return;
     }
 
-    let session;
     try {
-      session = sessionTokenService.verifyParticipant(authHeader.slice("Bearer ".length));
-    } catch {
-      next(new UnauthorizedError("Token de participante inválido o expirado"));
-      return;
-    }
+      const session = await validateAnonymousParticipantSession(
+        authHeader.slice("Bearer ".length),
+        sessionTokenService,
+        participantRepository,
+        eventRepository,
+      );
 
-    const participant = await participantRepository.findById(session.participantId);
-    if (!participant || !participant.isAnonymous || participant.eventId !== session.eventId) {
-      next(new UnauthorizedError("Sesión de participante inválida"));
-      return;
+      req.participantSession = session;
+      next();
+    } catch (error) {
+      next(error);
     }
-
-    const event = await eventRepository.findById(session.eventId);
-    if (!event || event.status !== "active") {
-      next(new UnauthorizedError("Sesión de participante inválida"));
-      return;
-    }
-
-    req.participantSession = session;
-    next();
   };
 }

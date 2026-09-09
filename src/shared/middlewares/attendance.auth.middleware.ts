@@ -1,18 +1,25 @@
 import type { NextFunction, Request, Response } from "express";
 import type { SessionTokenService } from "../../infrastructure/security/session.token.service.js";
+import type { EventRepository } from "../../repositories/event.repository.js";
+import type { ParticipantRepository } from "../../repositories/participant.repository.js";
 import { UnauthorizedError } from "../errors/index.js";
+import { validateAnonymousParticipantSession } from "../auth/anonymous.participant.session.validator.js";
 
 // Admite los mecanismos de sesion existentes
 export type AttendanceActor =
   | { type: "user"; userId: string }
   | { type: "anonymousParticipant"; participantId: string; eventId: string };
 
-export function createAttendanceAuthMiddleware(sessionTokenService: SessionTokenService) {
-  return function requireAuthenticatedAttendanceActor(
+export function createAttendanceAuthMiddleware(
+  sessionTokenService: SessionTokenService,
+  participantRepository: ParticipantRepository,
+  eventRepository: EventRepository,
+) {
+  return async function requireAuthenticatedAttendanceActor(
     req: Request,
     _res: Response,
     next: NextFunction,
-  ): void {
+  ): Promise<void> {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -31,15 +38,20 @@ export function createAttendanceAuthMiddleware(sessionTokenService: SessionToken
     }
 
     try {
-      const session = sessionTokenService.verifyParticipant(token);
+      const session = await validateAnonymousParticipantSession(
+        token,
+        sessionTokenService,
+        participantRepository,
+        eventRepository,
+      );
       req.attendanceActor = {
         type: "anonymousParticipant",
         participantId: session.participantId,
         eventId: session.eventId,
       };
       next();
-    } catch {
-      next(new UnauthorizedError("Token inválido o expirado"));
+    } catch (error) {
+      next(error);
     }
   };
 }
