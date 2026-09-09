@@ -5,7 +5,7 @@ import type {
   AttendanceParticipant,
   ParticipantRepository,
 } from "../repositories/participant.repository.js";
-import type { AttendanceActor } from "../shared/middlewares/attendance.auth.middleware.js";
+import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import {
   EventUnavailableError,
   ForbiddenError,

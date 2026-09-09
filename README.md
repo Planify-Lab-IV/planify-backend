@@ -62,9 +62,8 @@ curl -X PUT "http://localhost:<PORT>/events/<eventId>/participants/me/attendance
 
 El cliente no envía un `participantId`: el backend identifica al participante desde el token.
 Para un usuario registrado lo resuelve por `eventId + userId`; para un participante anónimo usa
-el `participantId` incluido en su sesión. Para rechazar la asistencia se usa el mismo endpoint
-con `{"state":"rejected"}`. Ambas respuestas exitosas devuelven `200` y el participante
-actualizado, incluyendo `attendanceState`.
+el `participantId` incluido en su sesión. Ambas respuestas exitosas devuelven `200` y el
+participante actualizado, incluyendo `attendanceState`.
 
 ```json
 {
@@ -77,6 +76,28 @@ actualizado, incluyendo `attendanceState`.
 }
 ```
 
+### Rechazar asistencia
+
+```bash
+curl -X PUT "http://localhost:<PORT>/events/<eventId>/participants/me/attendance" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"state":"rejected"}'
+```
+
+Respuesta `200`:
+
+```json
+{
+  "id": "<participantId>",
+  "eventId": "<eventId>",
+  "username": "Gil",
+  "isAnonymous": true,
+  "isOrganizer": false,
+  "attendanceState": "rejected"
+}
+```
+
 `not_confirmed` es el estado inicial y no puede enviarse manualmente. Por ejemplo, este
 request devuelve `400`:
 
@@ -85,6 +106,15 @@ curl -X PUT "http://localhost:<PORT>/events/<eventId>/participants/me/attendance
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"state":"not_confirmed"}'
+```
+
+Respuesta `400`:
+
+```json
+{
+  "error": "INVALID_DATA",
+  "message": "El estado de asistencia es inválido"
+}
 ```
 
 Una sesión anónima debe seguir siendo válida: el participante tiene que existir, pertenecer al

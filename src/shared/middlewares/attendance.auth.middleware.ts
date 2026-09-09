@@ -6,10 +6,6 @@ import { UnauthorizedError } from "../errors/index.js";
 import { validateAnonymousParticipantSession } from "../auth/anonymous.participant.session.validator.js";
 
 // Admite los mecanismos de sesion existentes
-export type AttendanceActor =
-  | { type: "user"; userId: string }
-  | { type: "anonymousParticipant"; participantId: string; eventId: string };
-
 export function createAttendanceAuthMiddleware(
   sessionTokenService: SessionTokenService,
   participantRepository: ParticipantRepository,
