@@ -83,6 +83,124 @@ const unusedParticipantRepository: ParticipantRepository = {
   invalidateAnonymousSessions: vi.fn(),
 };
 
+describe("EventService.getById", () => {
+  function makeService(event: Event | null = makeEvent()) {
+    const eventRepository = createInMemoryEventRepository(event ? [event] : []);
+    const service = createEventService(
+      eventRepository,
+      unusedGroupRepository,
+      unusedUserRepository,
+      unusedParticipantRepository,
+    );
+
+    return { service, eventRepository };
+  }
+
+  it("permite al organizador registrado obtener el detalle", async () => {
+    const event = makeEvent();
+    const { service, eventRepository } = makeService(event);
+
+    await expect(
+      service.getById(event.id, { type: "user", userId: "user-organizer" }),
+    ).resolves.toBe(event);
+    expect(eventRepository.findById).toHaveBeenCalledWith(event.id);
+  });
+
+  it("permite a un participante registrado obtener el detalle", async () => {
+    const event = makeEvent({
+      participants: [
+        ...makeEvent().participants,
+        {
+          id: "participant-member",
+          eventId: "event-1",
+          userId: "user-member",
+          username: "member",
+          isAnonymous: false,
+          isOrganizer: false,
+        },
+      ],
+    });
+    const { service } = makeService(event);
+
+    await expect(service.getById(event.id, { type: "user", userId: "user-member" })).resolves.toBe(
+      event,
+    );
+  });
+
+  it("permite a un participante anónimo del evento obtener el detalle", async () => {
+    const event = makeEvent({
+      participants: [
+        {
+          id: "participant-anonymous",
+          eventId: "event-1",
+          userId: null,
+          username: "invitado",
+          isAnonymous: true,
+          isOrganizer: false,
+        },
+      ],
+    });
+    const { service } = makeService(event);
+
+    await expect(
+      service.getById(event.id, {
+        type: "anonymousParticipant",
+        participantId: "participant-anonymous",
+        eventId: event.id,
+      }),
+    ).resolves.toBe(event);
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    const { service } = makeService(null);
+
+    await expect(
+      service.getById("event-unknown", { type: "user", userId: "user-organizer" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it("devuelve 403 si el usuario registrado no participa", async () => {
+    const { service } = makeService();
+
+    await expect(
+      service.getById("event-1", { type: "user", userId: "user-outsider" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("devuelve 403 si el token anónimo corresponde a otro evento", async () => {
+    const event = makeEvent({
+      participants: [
+        {
+          id: "participant-anonymous",
+          eventId: "event-1",
+          userId: null,
+          username: "invitado",
+          isAnonymous: true,
+          isOrganizer: false,
+        },
+      ],
+    });
+    const { service } = makeService(event);
+
+    await expect(
+      service.getById(event.id, {
+        type: "anonymousParticipant",
+        participantId: "participant-anonymous",
+        eventId: "event-2",
+      }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  it("permite a un participante registrado consultar un evento cancelado", async () => {
+    const event = makeEvent({ status: "cancelled" });
+    const { service } = makeService(event);
+
+    await expect(
+      service.getById(event.id, { type: "user", userId: "user-organizer" }),
+    ).resolves.toMatchObject({ status: "cancelled" });
+  });
+});
+
 describe("EventService.cancel", () => {
   it("permite al participante organizador cancelar el evento", async () => {
     const eventRepository = createInMemoryEventRepository([makeEvent()]);
