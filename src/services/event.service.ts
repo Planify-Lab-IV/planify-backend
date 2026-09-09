@@ -1,18 +1,34 @@
 import type { Event, EventRepository } from "../repositories/event.repository.js";
 import type { GroupRepository } from "../repositories/group.repository.js";
-import type { UserRepository, User } from "../repositories/user.repository.js";
-import { ValidationError, NotFoundError, ForbiddenError } from "../shared/errors/index.js";
+import type { User, UserRepository } from "../repositories/user.repository.js";
+import type {
+  AttendanceParticipant,
+  ParticipantRepository,
+} from "../repositories/participant.repository.js";
+import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
+import {
+  EventUnavailableError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "../shared/errors/index.js";
 import type { CreateEventDTO } from "../validators/event/event.validator.js";
 
 export interface EventService {
   createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event>;
   cancel(userId: string, eventId: string): Promise<Event>;
+  answerAttendance(
+    eventId: string,
+    actor: AttendanceActor,
+    state: unknown,
+  ): Promise<AttendanceParticipant>;
 }
 
 export function createEventService(
   eventRepository: EventRepository,
   groupRepository: GroupRepository,
   userRepository: UserRepository,
+  participantRepository: ParticipantRepository,
 ): EventService {
   return {
     async createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event> {
@@ -118,6 +134,36 @@ export function createEventService(
       }
 
       return eventRepository.cancelAtomic(eventId);
+    },
+
+    async answerAttendance(eventId, actor, state) {
+      if (state !== "confirmed" && state !== "rejected") {
+        throw new ValidationError("El estado de asistencia es inválido");
+      }
+
+      const event = await eventRepository.findById(eventId);
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      if (event.status !== "active") {
+        throw new EventUnavailableError();
+      }
+
+      const participant =
+        actor.type === "user"
+          ? await participantRepository.findAttendanceByEventIdAndUserId(eventId, actor.userId)
+          : await participantRepository.findAttendanceById(actor.participantId);
+
+      if (
+        !participant ||
+        participant.eventId !== eventId ||
+        (actor.type === "anonymousParticipant" &&
+          (!participant.isAnonymous || actor.eventId !== eventId))
+      ) {
+        throw new NotFoundError("Participante no encontrado");
+      }
+      return await participantRepository.updateAttendance(participant.id, state);
     },
   };
 }

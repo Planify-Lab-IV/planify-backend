@@ -5,15 +5,13 @@ import type { ParticipantRepository } from "../../repositories/participant.repos
 import { UnauthorizedError } from "../errors/index.js";
 import { validateAnonymousParticipantSession } from "../auth/anonymous.participant.session.validator.js";
 
-// protege rutas que en el futuro sean exclusivas de participantes anonimos
-// verifica que el jwt corresponda a "este" participante y evento, y siga vigente
-
-export function createParticipantAuthMiddleware(
+// Admite los mecanismos de sesion existentes
+export function createAttendanceAuthMiddleware(
   sessionTokenService: SessionTokenService,
   participantRepository: ParticipantRepository,
   eventRepository: EventRepository,
 ) {
-  return async function requireAuthenticatedParticipant(
+  return async function requireAuthenticatedAttendanceActor(
     req: Request,
     _res: Response,
     next: NextFunction,
@@ -21,19 +19,32 @@ export function createParticipantAuthMiddleware(
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      next(new UnauthorizedError("Token de participante ausente"));
+      next(new UnauthorizedError("Token de autenticación ausente"));
       return;
+    }
+
+    const token = authHeader.slice("Bearer ".length);
+
+    try {
+      req.attendanceActor = { type: "user", userId: sessionTokenService.verify(token) };
+      next();
+      return;
+    } catch {
+      // Vacio para intentar un segundo tipo de sesion
     }
 
     try {
       const session = await validateAnonymousParticipantSession(
-        authHeader.slice("Bearer ".length),
+        token,
         sessionTokenService,
         participantRepository,
         eventRepository,
       );
-
-      req.participantSession = session;
+      req.attendanceActor = {
+        type: "anonymousParticipant",
+        participantId: session.participantId,
+        eventId: session.eventId,
+      };
       next();
     } catch (error) {
       next(error);

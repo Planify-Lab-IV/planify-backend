@@ -1,3 +1,5 @@
+import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
+
 declare global {
   namespace Express {
     interface Request {
@@ -6,6 +8,7 @@ declare global {
         participantId: string;
         eventId: string;
       };
+      attendanceActor?: AttendanceActor;
     }
   }
 }
