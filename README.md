@@ -48,6 +48,43 @@ npx prisma studio
 | `dev2` | `dev2@planify.dev` | `DevPass123!` |
 | `dev3` | `dev3@planify.dev` | `DevPass123!` |
 
+## Asistencia de participantes
+
+Un participante puede responder su propia asistencia con un token de usuario registrado o
+con el token de sesión de un participante anónimo. El evento debe estar activo.
+
+```bash
+curl -X PUT "http://localhost:<PORT>/events/<eventId>/participants/<participantId>/attendance" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"state":"confirmed"}'
+```
+
+Para rechazar la asistencia se usa el mismo endpoint con `{"state":"rejected"}`. Ambas
+respuestas exitosas devuelven `200` y el participante actualizado, incluyendo
+`attendanceState`.
+
+```json
+{
+  "id": "<participantId>",
+  "eventId": "<eventId>",
+  "username": "Gil",
+  "isAnonymous": true,
+  "isOrganizer": false,
+  "attendanceState": "confirmed"
+}
+```
+
+`not_confirmed` es el estado inicial y no puede enviarse manualmente. Por ejemplo, este
+request devuelve `400`:
+
+```bash
+curl -X PUT "http://localhost:<PORT>/events/<eventId>/participants/<participantId>/attendance" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"state":"not_confirmed"}'
+```
+
 ## Repositorio Mobile
 
 [Planify Mobile](https://github.com/Planify-Lab-IV/planify-mobile)

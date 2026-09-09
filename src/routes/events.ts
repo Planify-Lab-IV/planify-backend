@@ -7,6 +7,7 @@ import { eventRepository } from "../repositories/event.repository.js";
 import { groupRepository } from "../repositories/group.repository.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { createAuthMiddleware } from "../shared/middlewares/auth.middleware.js";
+import { createAttendanceAuthMiddleware } from "../shared/middlewares/attendance.auth.middleware.js";
 import { createSessionTokenService } from "../infrastructure/security/session.token.service.js";
 import { createParticipantController } from "../controllers/participant.controller.js";
 import { createParticipantService } from "../services/participant.service.js";
@@ -22,14 +23,26 @@ const router = Router();
 // -_> Inyección de dependencias
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
 const requireAuth = createAuthMiddleware(sessionTokenService);
+const requireAttendanceAuth = createAttendanceAuthMiddleware(sessionTokenService);
 
-const eventService = createEventService(eventRepository, groupRepository, userRepository);
+const eventService = createEventService(
+  eventRepository,
+  groupRepository,
+  userRepository,
+  participantRepository,
+);
 const eventController = createEventController(eventService);
 
 router.post("/events", requireAuth, (req, res, next) => eventController.create(req, res, next));
 
 router.put("/events/:id/cancel", requireAuth, (req, res, next) =>
   eventController.cancel(req, res, next),
+);
+
+router.put(
+  "/events/:id/participants/:participantId/attendance",
+  requireAttendanceAuth,
+  (req, res, next) => eventController.answerAttendance(req, res, next),
 );
 
 // INVITATIONS

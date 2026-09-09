@@ -40,7 +40,9 @@ function makeParticipantRepository(foundParticipant: Participant | null): Partic
     findById: vi.fn(async () => foundParticipant),
     findByEventId: vi.fn(),
     findByEventIdAndUsername: vi.fn(),
+    findAttendanceById: vi.fn(),
     createAnonymous: vi.fn(),
+    updateAttendance: vi.fn(),
   };
 }
 

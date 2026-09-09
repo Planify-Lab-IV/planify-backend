@@ -87,9 +87,16 @@ model EventParticipant {
 
   event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attendanceState AttendanceState @default(not_confirmed) @map("attendance_state")
 
   @@unique([eventId, username])
   @@index([eventId])
   @@index([userId])
   @@map("participante")
+}
+
+enum AttendanceState {
+  not_confirmed
+  confirmed
+  rejected
 }
