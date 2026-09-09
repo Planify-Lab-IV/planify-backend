@@ -3,12 +3,17 @@ import type { EventRepository } from "../../repositories/event.repository.js";
 import type { ParticipantRepository } from "../../repositories/participant.repository.js";
 import { UnauthorizedError } from "../errors/index.js";
 
+export interface AnonymousParticipantSessionValidationOptions {
+  requireActiveEvent?: boolean;
+}
+
 // --> Verifica que un token anónimo siga representando una sesión utilizable.
 export async function validateAnonymousParticipantSession(
   token: string,
   sessionTokenService: SessionTokenService,
   participantRepository: ParticipantRepository,
   eventRepository: EventRepository,
+  options: AnonymousParticipantSessionValidationOptions = {},
 ) {
   let session;
   try {
@@ -23,7 +28,9 @@ export async function validateAnonymousParticipantSession(
   }
 
   const event = await eventRepository.findById(session.eventId);
-  if (!event || event.status !== "active") {
+  const requireActiveEvent = options.requireActiveEvent ?? true;
+  if (!event || (requireActiveEvent && event.status !== "active")) {
+    // --> El evento debe existir y estar activo
     throw new UnauthorizedError("Sesión de participante inválida");
   }
 

@@ -17,6 +17,9 @@ import { env } from "../shared/config/env.js";
 import { invitationRepository } from "../repositories/invitation.repository.js";
 import { createInvitationsService } from "../services/invitations.service.js";
 import { createInvitationController } from "../controllers/invitation.controller.js";
+import { availabilityRepository } from "../repositories/availability.repository.js";
+import { createAvailabilityService } from "../services/availability.service.js";
+import { createAvailabilityController } from "../controllers/availability.controller.js";
 
 const router = Router();
 
@@ -27,6 +30,12 @@ const requireAttendanceAuth = createAttendanceAuthMiddleware(
   sessionTokenService,
   participantRepository,
   eventRepository,
+);
+const requireAvailabilityAuth = createAttendanceAuthMiddleware(
+  sessionTokenService,
+  participantRepository,
+  eventRepository,
+  { requireActiveAnonymousEvent: false },
 );
 
 const eventService = createEventService(
@@ -45,6 +54,21 @@ router.put("/events/:id/cancel", requireAuth, (req, res, next) =>
 
 router.put("/events/:eventId/participants/me/attendance", requireAttendanceAuth, (req, res, next) =>
   eventController.answerAttendance(req, res, next),
+);
+
+const availabilityService = createAvailabilityService(
+  eventRepository,
+  participantRepository,
+  availabilityRepository,
+);
+const availabilityController = createAvailabilityController(availabilityService);
+
+router.put("/events/:eventId/availability", requireAvailabilityAuth, (req, res, next) =>
+  availabilityController.save(req, res, next),
+);
+
+router.get("/events/:eventId/availability", requireAvailabilityAuth, (req, res, next) =>
+  availabilityController.load(req, res, next),
 );
 
 // INVITATIONS

@@ -10,10 +10,15 @@ export type AttendanceActor =
   | { type: "user"; userId: string }
   | { type: "anonymousParticipant"; participantId: string; eventId: string };
 
+export interface AttendanceAuthOptions {
+  requireActiveAnonymousEvent?: boolean;
+}
+
 export function createAttendanceAuthMiddleware(
   sessionTokenService: SessionTokenService,
   participantRepository: ParticipantRepository,
   eventRepository: EventRepository,
+  options: AttendanceAuthOptions = {},
 ) {
   return async function requireAuthenticatedAttendanceActor(
     req: Request,
@@ -43,6 +48,7 @@ export function createAttendanceAuthMiddleware(
         sessionTokenService,
         participantRepository,
         eventRepository,
+        { requireActiveEvent: options.requireActiveAnonymousEvent ?? true }, // --> Para los casos donde no se pasa este atributo, que sea true
       );
       req.attendanceActor = {
         type: "anonymousParticipant",
