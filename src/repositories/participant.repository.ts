@@ -34,8 +34,6 @@ export interface ParticipantRepository {
     username: string;
     pinHash: string;
   }): Promise<Participant>;
-
-  invalidateAnonymousSessions(eventId: string): Promise<void>;
 }
 
 export const participantRepository: ParticipantRepository = {
@@ -109,17 +107,5 @@ export const participantRepository: ParticipantRepository = {
 
       throw error;
     }
-  },
-
-  async invalidateAnonymousSessions(eventId) {
-    await prisma.eventParticipant.updateMany({
-      where: {
-        eventId,
-        isAnonymous: true,
-      },
-      data: {
-        pinHash: null,
-      },
-    });
   },
 };
