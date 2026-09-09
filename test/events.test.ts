@@ -381,6 +381,35 @@ describe("PUT /events/:eventId/participants/me/attendance", () => {
     expect(response.body.attendanceState).toBe("rejected");
   });
 
+  it("devuelve 401 si el token anónimo corresponde a un evento cancelado", async () => {
+    const anonymousParticipant = {
+      ...participant,
+      id: "participant-anonymous",
+      userId: null,
+      isAnonymous: true,
+    };
+    const anonymousToken = createSessionTokenService(env.JWT_SECRET).signParticipant(
+      anonymousParticipant.id,
+      eventId,
+    );
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(
+      anonymousParticipant as never,
+    );
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .put(`/events/${eventId}/participants/me/attendance`)
+      .set("Authorization", `Bearer ${anonymousToken}`)
+      .send({ state: "confirmed" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.eventParticipant.update).not.toHaveBeenCalled();
+  });
+
   it.each([
     { state: "not_confirmed" },
     { state: "maybe" },
@@ -405,6 +434,16 @@ describe("PUT /events/:eventId/participants/me/attendance", () => {
 
     expect(response.status).toBe(401);
     expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("no expone una ruta que acepte participantId", async () => {
+    const response = await request(app)
+      .put(`/events/${eventId}/participants/participant-other/attendance`)
+      .set("Authorization", `Bearer ${userToken}`)
+      .send({ state: "confirmed" });
+
+    expect(response.status).toBe(404);
+    expect(prisma.eventParticipant.update).not.toHaveBeenCalled();
   });
 
   it("devuelve 404 si el usuario no participa del evento", async () => {

@@ -283,6 +283,7 @@ describe("EventService.answerAttendance", () => {
         ),
       ).rejects.toBeInstanceOf(ValidationError);
       expect(participantRepository.findAttendanceById).not.toHaveBeenCalled();
+      expect(participantRepository.findAttendanceByEventIdAndUserId).not.toHaveBeenCalled();
       expect(participantRepository.updateAttendance).not.toHaveBeenCalled();
     },
   );
