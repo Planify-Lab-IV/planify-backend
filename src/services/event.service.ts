@@ -16,13 +16,13 @@ import type { CreateEventDTO } from "../validators/event/event.validator.js";
 
 export interface EventService {
   createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event>;
-  getById(eventId: string, actor: AttendanceActor): Promise<Event>;
   cancel(userId: string, eventId: string): Promise<Event>;
   answerAttendance(
     eventId: string,
     actor: AttendanceActor,
     state: unknown,
   ): Promise<AttendanceParticipant>;
+  getById(eventId: string, actor: AttendanceActor): Promise<Event>;
 }
 
 export function createEventService(
