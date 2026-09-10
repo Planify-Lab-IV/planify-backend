@@ -58,7 +58,7 @@ model Event {
   group        Group              @relation(fields: [groupId], references: [id])
   organizer    User               @relation("EventOrganizer", fields: [organizerId], references: [id])
   participants EventParticipant[]
-  invitations Invitation[]
+  invitations  Invitation[]
 
   @@map("evento")
 }
@@ -85,14 +85,30 @@ model EventParticipant {
   isOrganizer Boolean @default(false) @map("es_organizador")
   pinHash     String? @map("pin_hash")
 
-  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
-  attendanceState AttendanceState @default(not_confirmed) @map("attendance_state")
+  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attendanceState   AttendanceState    @default(not_confirmed) @map("attendance_state")
+  availabilitySlots AvailabilitySlot[]
 
+  @@unique([id, eventId])
   @@unique([eventId, username])
   @@index([eventId])
   @@index([userId])
   @@map("participante")
+}
+
+model AvailabilitySlot {
+  id            String @id @default(uuid())
+  participantId String @map("participante_id")
+  eventId       String @map("evento_id")
+  weekDay       Int    @map("week_day")
+  hourBlock     Int    @map("hour_block")
+
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId], onDelete: Cascade)
+
+  @@unique([participantId, eventId, weekDay, hourBlock])
+  @@index([participantId, eventId])
+  @@map("availability_slot")
 }
 
 enum AttendanceState {
