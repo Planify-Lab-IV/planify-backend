@@ -130,6 +130,44 @@ describe("/events/:eventId/availability", () => {
     });
   });
 
+  it("devuelve la última selección completa del participante anónimo", async () => {
+    const anonymousParticipant = {
+      ...participant,
+      id: "participant-anonymous",
+      userId: null,
+      isAnonymous: true,
+    };
+    const anonymousToken = sessionTokenService.signParticipant(anonymousParticipant.id, eventId);
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(event as never);
+    vi.mocked(prisma.availabilitySlot.findMany).mockResolvedValueOnce([
+      { eventId, participantId: anonymousParticipant.id, weekDay: 1, hourBlock: 10 },
+      { eventId, participantId: anonymousParticipant.id, weekDay: 5, hourBlock: 20 },
+    ] as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}/availability`)
+      .set("Authorization", `Bearer ${anonymousToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      slots: [
+        { weekDay: 1, hourBlock: 10 },
+        { weekDay: 5, hourBlock: 20 },
+      ],
+    });
+    expect(prisma.availabilitySlot.findMany).toHaveBeenCalledWith({
+      where: { eventId, participantId: anonymousParticipant.id },
+      select: {
+        participantId: true,
+        eventId: true,
+        weekDay: true,
+        hourBlock: true,
+      },
+      orderBy: [{ weekDay: "asc" }, { hourBlock: "asc" }],
+    });
+  });
+
   it.each([
     { slots: [{ weekDay: 7, hourBlock: 9 }] },
     { slots: [{ weekDay: 0, hourBlock: 9, extra: true }] },
@@ -184,6 +222,29 @@ describe("/events/:eventId/availability", () => {
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("UNAUTHORIZED");
     expect(prisma.availabilitySlot.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("rechaza la precarga de una sesión anónima de un evento cancelado", async () => {
+    const anonymousParticipant = {
+      ...participant,
+      id: "participant-anonymous",
+      userId: null,
+      isAnonymous: true,
+    };
+    const anonymousToken = sessionTokenService.signParticipant(anonymousParticipant.id, eventId);
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}/availability`)
+      .set("Authorization", `Bearer ${anonymousToken}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.availabilitySlot.findMany).not.toHaveBeenCalled();
   });
 
   it("requiere una sesión válida", async () => {
