@@ -166,6 +166,195 @@ describe("POST /events", () => {
   });
 });
 
+describe("GET /events/:eventId", () => {
+  const eventId = "event-detail-1";
+  const organizerId = "user-organizer";
+  const memberId = "user-member";
+  const anonymousParticipantId = "participant-anonymous";
+  const tokenService = createSessionTokenService(env.JWT_SECRET);
+  const event = {
+    id: eventId,
+    groupId: "group-1",
+    organizerId,
+    name: "Cumpleaños",
+    location: "Casa de Ana",
+    status: "active",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    participants: [
+      {
+        id: "participant-organizer",
+        eventId,
+        userId: organizerId,
+        username: "organizer",
+        isAnonymous: false,
+        isOrganizer: true,
+      },
+      {
+        id: "participant-member",
+        eventId,
+        userId: memberId,
+        username: "member",
+        isAnonymous: false,
+        isOrganizer: false,
+      },
+      {
+        id: anonymousParticipantId,
+        eventId,
+        userId: null,
+        username: "invitado",
+        isAnonymous: true,
+        isOrganizer: false,
+        pinHash: "hash-secreto",
+      },
+    ],
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("permite al organizador registrado obtener el detalle público", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}`)
+      .set("Authorization", `Bearer ${tokenService.sign(organizerId)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: eventId,
+      groupId: "group-1",
+      organizerId,
+      name: "Cumpleaños",
+      location: "Casa de Ana",
+      status: "active",
+    });
+    expect(response.body.participants).toHaveLength(3);
+    expect(response.body.participants[0]).not.toHaveProperty("id");
+    expect(response.body.participants[2]).not.toHaveProperty("pinHash");
+    expect(JSON.stringify(response.body)).not.toContain("hash-secreto");
+  });
+
+  it("permite a un participante registrado obtener el detalle", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}`)
+      .set("Authorization", `Bearer ${tokenService.sign(memberId)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("active");
+  });
+
+  it("permite a un participante anónimo del mismo evento obtener el detalle", async () => {
+    const anonymousParticipant = event.participants[2];
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(
+      anonymousParticipant as never,
+    );
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce(event as never)
+      .mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}`)
+      .set(
+        "Authorization",
+        `Bearer ${tokenService.signParticipant(anonymousParticipantId, eventId)}`,
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(eventId);
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .get("/events/event-inexistente")
+      .set("Authorization", `Bearer ${tokenService.sign(organizerId)}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+  });
+
+  it("devuelve 403 si el usuario registrado no participa", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-outsider")}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(response.body).not.toHaveProperty("name");
+    expect(response.body).not.toHaveProperty("participants");
+  });
+
+  it("devuelve 403 si el token anónimo pertenece a otro evento", async () => {
+    const otherEventId = "event-other";
+    const otherAnonymousParticipant = {
+      ...event.participants[2],
+      eventId: otherEventId,
+    };
+    const otherEvent = {
+      ...event,
+      id: otherEventId,
+      participants: [otherAnonymousParticipant],
+    };
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(
+      otherAnonymousParticipant as never,
+    );
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce(otherEvent as never)
+      .mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}`)
+      .set(
+        "Authorization",
+        `Bearer ${tokenService.signParticipant(anonymousParticipantId, otherEventId)}`,
+      );
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(response.body).not.toHaveProperty("participants");
+  });
+
+  it("permite a un participante registrado consultar un evento cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}`)
+      .set("Authorization", `Bearer ${tokenService.sign(organizerId)}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("cancelled");
+  });
+
+  it("rechaza la sesión anónima invalidada por la cancelación", async () => {
+    const anonymousParticipant = event.participants[2];
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(
+      anonymousParticipant as never,
+    );
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}`)
+      .set(
+        "Authorization",
+        `Bearer ${tokenService.signParticipant(anonymousParticipantId, eventId)}`,
+      );
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+  });
+});
+
 describe("EventRepository.cancelAtomic", () => {
   beforeEach(() => vi.clearAllMocks());
 

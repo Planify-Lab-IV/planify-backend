@@ -11,10 +11,30 @@ export interface EventController {
   create(req: Request, res: Response, next: NextFunction): Promise<void>;
   cancel(req: Request, res: Response, next: NextFunction): Promise<void>;
   answerAttendance(req: Request, res: Response, next: NextFunction): Promise<void>;
+  getById(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 
 export function createEventController(eventService: EventService): EventController {
   return {
+    async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
+      try {
+        const eventId = req.params.eventId;
+        if (typeof eventId !== "string" || eventId.trim() === "") {
+          throw new ValidationError("El eventId es requerido");
+        }
+
+        const actor = req.attendanceActor;
+        if (!actor) {
+          throw new UnauthorizedError("Usuario no autenticado");
+        }
+
+        const event = await eventService.getById(eventId, actor);
+        res.status(200).json(toEventResponseDTO(event));
+      } catch (error) {
+        next(error);
+      }
+    },
+
     async answerAttendance(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
         const eventId = req.params.eventId;

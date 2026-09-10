@@ -22,6 +22,7 @@ export interface EventService {
     actor: AttendanceActor,
     state: unknown,
   ): Promise<AttendanceParticipant>;
+  getById(eventId: string, actor: AttendanceActor): Promise<Event>;
 }
 
 export function createEventService(
@@ -31,6 +32,28 @@ export function createEventService(
   participantRepository: ParticipantRepository,
 ): EventService {
   return {
+    async getById(eventId: string, actor: AttendanceActor): Promise<Event> {
+      const event = await eventRepository.findById(eventId);
+
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      const isAuthorized =
+        actor.type === "user"
+          ? event.participants.some((participant) => participant.userId === actor.userId)
+          : actor.eventId === eventId &&
+            event.participants.some(
+              (participant) => participant.id === actor.participantId && participant.isAnonymous,
+            );
+
+      if (!isAuthorized) {
+        throw new ForbiddenError("No pertenecés a este evento");
+      }
+
+      return event;
+    },
+
     async createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event> {
       if (!dto.name.trim()) {
         throw new ValidationError("El nombre del evento es requerido");
