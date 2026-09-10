@@ -145,7 +145,24 @@ describe("/events/:eventId/availability", () => {
     expect(prisma.availabilitySlot.createMany).not.toHaveBeenCalled();
   });
 
-  it("devuelve 400 para un evento cancelado también con sesión anónima", async () => {
+  it("devuelve 400 para un usuario registrado en un evento cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .put(`/events/${eventId}/availability`)
+      .set("Authorization", `Bearer ${userToken}`)
+      .send({ slots: [] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("INVALID_DATA");
+    expect(prisma.eventParticipant.findFirst).not.toHaveBeenCalled();
+    expect(prisma.availabilitySlot.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 401 para una sesión anónima de un evento cancelado", async () => {
     const anonymousParticipant = {
       ...participant,
       id: "participant-anonymous",
@@ -164,8 +181,8 @@ describe("/events/:eventId/availability", () => {
       .set("Authorization", `Bearer ${anonymousToken}`)
       .send({ slots: [] });
 
-    expect(response.status).toBe(400);
-    expect(response.body.error).toBe("INVALID_DATA");
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
     expect(prisma.availabilitySlot.deleteMany).not.toHaveBeenCalled();
   });
 

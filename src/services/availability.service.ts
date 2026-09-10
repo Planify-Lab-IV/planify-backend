@@ -7,7 +7,7 @@ import type {
   AttendanceParticipant,
   ParticipantRepository,
 } from "../repositories/participant.repository.js";
-import type { AttendanceActor } from "../shared/middlewares/attendance.auth.middleware.js";
+import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { NotFoundError, ValidationError } from "../shared/errors/index.js";
 
 export interface AvailabilityService {

@@ -31,12 +31,6 @@ const requireAttendanceAuth = createAttendanceAuthMiddleware(
   participantRepository,
   eventRepository,
 );
-const requireAvailabilityAuth = createAttendanceAuthMiddleware(
-  sessionTokenService,
-  participantRepository,
-  eventRepository,
-  { requireActiveAnonymousEvent: false },
-);
 
 const eventService = createEventService(
   eventRepository,
@@ -63,11 +57,11 @@ const availabilityService = createAvailabilityService(
 );
 const availabilityController = createAvailabilityController(availabilityService);
 
-router.put("/events/:eventId/availability", requireAvailabilityAuth, (req, res, next) =>
+router.put("/events/:eventId/availability", requireAttendanceAuth, (req, res, next) =>
   availabilityController.save(req, res, next),
 );
 
-router.get("/events/:eventId/availability", requireAvailabilityAuth, (req, res, next) =>
+router.get("/events/:eventId/availability", requireAttendanceAuth, (req, res, next) =>
   availabilityController.load(req, res, next),
 );
 
