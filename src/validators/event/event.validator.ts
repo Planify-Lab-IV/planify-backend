@@ -15,7 +15,7 @@ export type CreateEventDTO = z.infer<typeof createEventSchema>;
 
 export const confirmScheduleSchema = z
   .object({
-    startDateTime: z.string().datetime({ offset: true }),
+    startDateTime: z.string().datetime({ offset: true }), // --> offset entre UTC y hora local
   })
   .strict();
 

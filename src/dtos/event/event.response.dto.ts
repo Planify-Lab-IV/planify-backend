@@ -15,6 +15,7 @@ export interface EventResponseDTO {
   organizerId: string;
   groupId: string;
   status: EventStatus;
+  startDateTime: Date | null;
   createdAt: Date;
   updatedAt: Date;
   participants: EventParticipantResponseDTO[];
@@ -28,6 +29,7 @@ export function toEventResponseDTO(event: Event): EventResponseDTO {
     organizerId: event.organizerId,
     groupId: event.groupId,
     status: event.status,
+    startDateTime: event.startDateTime,
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
     participants: event.participants.map((participant) => ({
