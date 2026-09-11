@@ -22,6 +22,7 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
     name: "Cumpleaños",
     location: "Casa de Ana",
     status: "active",
+    startDateTime: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     participants: [
@@ -53,6 +54,16 @@ function createInMemoryEventRepository(events: Event[]): EventRepository {
       const cancelledEvent = { ...event, status: "cancelled" as const };
       records.set(id, cancelledEvent);
       return cancelledEvent;
+    }),
+    confirmSchedule: vi.fn(async (id, startDateTime) => {
+      const event = records.get(id);
+      if (!event) {
+        throw new Error("El evento debe existir antes de confirmar su horario");
+      }
+
+      const confirmedEvent = { ...event, status: "confirmed" as const, startDateTime };
+      records.set(id, confirmedEvent);
+      return confirmedEvent;
     }),
   };
 }
@@ -272,6 +283,87 @@ describe("EventService.cancel", () => {
 
     await expect(service.cancel("user-organizer", "event-1")).resolves.toBe(cancelledEvent);
     expect(eventRepository.cancelAtomic).not.toHaveBeenCalled();
+  });
+});
+
+describe("EventService.confirmSchedule", () => {
+  function makeService(event: Event | null = makeEvent()) {
+    const eventRepository = createInMemoryEventRepository(event ? [event] : []);
+    const service = createEventService(
+      eventRepository,
+      unusedGroupRepository,
+      unusedUserRepository,
+      unusedParticipantRepository,
+    );
+
+    return { service, eventRepository };
+  }
+
+  it("confirma un horario futuro elegido por el organizador", async () => {
+    const { service, eventRepository } = makeService();
+    const startDateTime = new Date("2099-12-31T22:00:00.000Z");
+
+    await expect(
+      service.confirmSchedule("user-organizer", "event-1", startDateTime),
+    ).resolves.toMatchObject({ status: "confirmed", startDateTime });
+    expect(eventRepository.confirmSchedule).toHaveBeenCalledWith("event-1", startDateTime);
+  });
+
+  it("devuelve 400 para una fecha inválida sin consultar el evento", async () => {
+    const { service, eventRepository } = makeService();
+
+    await expect(
+      service.confirmSchedule("user-organizer", "event-1", new Date("invalid")),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(eventRepository.findById).not.toHaveBeenCalled();
+    expect(eventRepository.confirmSchedule).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 400 para una fecha pasada sin consultar el evento", async () => {
+    const { service, eventRepository } = makeService();
+
+    await expect(
+      service.confirmSchedule("user-organizer", "event-1", new Date("2000-01-01T00:00:00Z")),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(eventRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    const { service, eventRepository } = makeService(null);
+
+    await expect(
+      service.confirmSchedule("user-organizer", "event-unknown", new Date("2099-12-31T22:00:00Z")),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(eventRepository.confirmSchedule).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si quien confirma no es el organizador", async () => {
+    const { service, eventRepository } = makeService();
+
+    await expect(
+      service.confirmSchedule("user-member", "event-1", new Date("2099-12-31T22:00:00Z")),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(eventRepository.confirmSchedule).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 400 si el evento está cancelado", async () => {
+    const { service, eventRepository } = makeService(makeEvent({ status: "cancelled" }));
+
+    await expect(
+      service.confirmSchedule("user-organizer", "event-1", new Date("2099-12-31T22:00:00Z")),
+    ).rejects.toBeInstanceOf(ValidationError);
+    expect(eventRepository.confirmSchedule).not.toHaveBeenCalled();
+  });
+
+  it("permite volver a confirmar un evento para actualizar su horario", async () => {
+    const { service } = makeService(
+      makeEvent({ status: "confirmed", startDateTime: new Date("2099-01-01T00:00:00Z") }),
+    );
+    const newStartDateTime = new Date("2099-12-31T22:00:00Z");
+
+    await expect(
+      service.confirmSchedule("user-organizer", "event-1", newStartDateTime),
+    ).resolves.toMatchObject({ status: "confirmed", startDateTime: newStartDateTime });
   });
 });
 
