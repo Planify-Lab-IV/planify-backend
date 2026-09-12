@@ -17,6 +17,7 @@ import type { CreateEventDTO } from "../validators/event/event.validator.js";
 export interface EventService {
   createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event>;
   cancel(userId: string, eventId: string): Promise<Event>;
+  confirmSchedule(userId: string, eventId: string, startDateTime: Date): Promise<Event>;
   answerAttendance(
     eventId: string,
     actor: AttendanceActor,
@@ -157,6 +158,32 @@ export function createEventService(
       }
 
       return eventRepository.cancelAtomic(eventId);
+    },
+
+    async confirmSchedule(userId: string, eventId: string, startDateTime: Date): Promise<Event> {
+      if (
+        !(startDateTime instanceof Date) ||
+        Number.isNaN(startDateTime.getTime()) ||
+        startDateTime.getTime() <= Date.now()
+      ) {
+        throw new ValidationError("La fecha y hora de inicio debe ser válida y futura");
+      }
+
+      const event = await eventRepository.findById(eventId);
+
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      if (event.organizerId !== userId) {
+        throw new ForbiddenError("Solo el organizador puede confirmar el horario del evento");
+      }
+
+      if (event.status === "cancelled") {
+        throw new ValidationError("No se puede confirmar el horario de un evento cancelado");
+      }
+
+      return eventRepository.confirmSchedule(eventId, startDateTime);
     },
 
     async answerAttendance(eventId, actor, state) {

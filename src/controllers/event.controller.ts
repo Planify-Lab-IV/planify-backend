@@ -2,7 +2,10 @@
 import type { Request, Response, NextFunction } from "express";
 import type { EventService } from "../services/event.service.js";
 import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
-import { validateCreateEventDTO } from "../validators/event/event.validator.js";
+import {
+  validateConfirmScheduleDTO,
+  validateCreateEventDTO,
+} from "../validators/event/event.validator.js";
 import { validateAttendanceResponseDTO } from "../validators/participant/attendance.validator.js";
 import { toEventResponseDTO } from "../dtos/event/event.response.dto.js";
 import { toParticipantResponseDTO } from "../dtos/participant/participant.response.dto.js";
@@ -10,6 +13,7 @@ import { toParticipantResponseDTO } from "../dtos/participant/participant.respon
 export interface EventController {
   create(req: Request, res: Response, next: NextFunction): Promise<void>;
   cancel(req: Request, res: Response, next: NextFunction): Promise<void>;
+  confirmSchedule(req: Request, res: Response, next: NextFunction): Promise<void>;
   answerAttendance(req: Request, res: Response, next: NextFunction): Promise<void>;
   getById(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
@@ -68,6 +72,31 @@ export function createEventController(eventService: EventService): EventControll
         }
 
         const event = await eventService.cancel(userId, eventId);
+        res.status(200).json(toEventResponseDTO(event));
+      } catch (error) {
+        next(error);
+      }
+    },
+
+    async confirmSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
+      try {
+        const userId = req.userId;
+        if (!userId) {
+          throw new UnauthorizedError("Usuario no autenticado");
+        }
+
+        const eventId = req.params.eventId;
+        if (typeof eventId !== "string" || eventId.trim() === "") {
+          throw new ValidationError("El eventId es requerido");
+        }
+
+        const dto = validateConfirmScheduleDTO(req.body);
+        const event = await eventService.confirmSchedule(
+          userId,
+          eventId,
+          new Date(dto.startDateTime),
+        );
+
         res.status(200).json(toEventResponseDTO(event));
       } catch (error) {
         next(error);
