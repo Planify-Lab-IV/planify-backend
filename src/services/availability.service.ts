@@ -1,4 +1,5 @@
 import type {
+  AvailabilityHeatmapSlot,
   AvailabilityRepository,
   AvailabilitySlotInput,
 } from "../repositories/availability.repository.js";
@@ -10,9 +11,15 @@ import type {
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { NotFoundError, ValidationError } from "../shared/errors/index.js";
 
+export interface AvailabilityHeatmap {
+  totalParticipants: number;
+  slots: AvailabilityHeatmapSlot[];
+}
+
 export interface AvailabilityService {
   save(eventId: string, actor: AttendanceActor, slots: AvailabilitySlotInput[]): Promise<void>;
   load(eventId: string, actor: AttendanceActor): Promise<AvailabilitySlotInput[]>;
+  heatmap(eventId: string): Promise<AvailabilityHeatmap>;
 }
 
 function validateEventId(eventId: string): void {
@@ -108,6 +115,22 @@ export function createAvailabilityService(
       const slots = await availabilityRepository.findForParticipant(eventId, participant.id);
 
       return slots.map(({ weekDay, hourBlock }) => ({ weekDay, hourBlock }));
+    },
+
+    async heatmap(eventId) {
+      validateEventId(eventId);
+
+      const event = await eventRepository.findById(eventId);
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      const slots = await availabilityRepository.findHeatmapByEventId(eventId);
+
+      return {
+        totalParticipants: event.participants.length,
+        slots,
+      };
     },
   };
 }

@@ -4,7 +4,11 @@ import type {
   AvailabilitySlot,
   AvailabilitySlotInput,
 } from "../src/repositories/availability.repository.js";
-import type { Event, EventRepository } from "../src/repositories/event.repository.js";
+import type {
+  Event,
+  EventParticipant,
+  EventRepository,
+} from "../src/repositories/event.repository.js";
 import type {
   AttendanceParticipant,
   ParticipantRepository,
@@ -36,6 +40,18 @@ function makeParticipant(overrides: Partial<AttendanceParticipant> = {}): Attend
     isAnonymous: false,
     isOrganizer: false,
     attendanceState: "not_confirmed",
+    ...overrides,
+  };
+}
+
+function makeEventParticipant(overrides: Partial<EventParticipant> = {}): EventParticipant {
+  return {
+    id: "participant-1",
+    eventId: "event-1",
+    userId: "user-1",
+    username: "Ana",
+    isAnonymous: false,
+    isOrganizer: false,
     ...overrides,
   };
 }
@@ -84,6 +100,25 @@ function createAvailabilityRepository(
       return records.filter(
         (slot) => slot.eventId === eventId && slot.participantId === participantId,
       );
+    }),
+    findHeatmapByEventId: vi.fn(async (eventId) => {
+      const participantsBySlot = new Map<string, Set<string>>();
+
+      for (const slot of records) {
+        if (slot.eventId !== eventId) continue;
+
+        const key = `${slot.weekDay}:${slot.hourBlock}`;
+        const participantIds = participantsBySlot.get(key) ?? new Set<string>();
+        participantIds.add(slot.participantId);
+        participantsBySlot.set(key, participantIds);
+      }
+
+      return [...participantsBySlot.entries()]
+        .map(([key, participantIds]) => {
+          const [weekDay, hourBlock] = key.split(":").map(Number);
+          return { weekDay, hourBlock, availableCount: participantIds.size };
+        })
+        .sort((left, right) => left.weekDay - right.weekDay || left.hourBlock - right.hourBlock);
     }),
   };
 }
@@ -227,5 +262,72 @@ describe("AvailabilityService.load", () => {
     ).rejects.toBeInstanceOf(NotFoundError);
 
     expect(availabilityRepository.findForParticipant).not.toHaveBeenCalled();
+  });
+});
+
+describe("AvailabilityService.heatmap", () => {
+  it("agrega solapamientos parciales y conserva participantes sin disponibilidad", async () => {
+    const event = makeEvent({
+      participants: [
+        makeEventParticipant({ id: "participant-ana", userId: "user-ana", username: "Ana" }),
+        makeEventParticipant({ id: "participant-beto", userId: "user-beto", username: "Beto" }),
+        makeEventParticipant({ id: "participant-cami", userId: "user-cami", username: "Cami" }),
+        makeEventParticipant({
+          id: "participant-dani",
+          userId: null,
+          username: "Dani",
+          isAnonymous: true,
+        }),
+      ],
+    });
+    const availabilityRepository = createAvailabilityRepository([
+      { participantId: "participant-ana", eventId: "event-1", weekDay: 0, hourBlock: 10 },
+      { participantId: "participant-ana", eventId: "event-1", weekDay: 0, hourBlock: 11 },
+      { participantId: "participant-beto", eventId: "event-1", weekDay: 0, hourBlock: 10 },
+      { participantId: "participant-beto", eventId: "event-1", weekDay: 1, hourBlock: 18 },
+      { participantId: "participant-cami", eventId: "event-1", weekDay: 0, hourBlock: 10 },
+      { participantId: "participant-cami", eventId: "event-1", weekDay: 0, hourBlock: 11 },
+    ]);
+    const { service } = makeService(event, [], availabilityRepository);
+
+    await expect(service.heatmap("event-1")).resolves.toEqual({
+      totalParticipants: 4,
+      slots: [
+        { weekDay: 0, hourBlock: 10, availableCount: 3 },
+        { weekDay: 0, hourBlock: 11, availableCount: 2 },
+        { weekDay: 1, hourBlock: 18, availableCount: 1 },
+      ],
+    });
+  });
+
+  it("devuelve slots vacíos sin perder el total de participantes", async () => {
+    const event = makeEvent({
+      participants: [
+        makeEventParticipant({ id: "participant-organizer", isOrganizer: true }),
+        makeEventParticipant({ id: "participant-registered", userId: "user-registered" }),
+        makeEventParticipant({ id: "participant-anonymous", userId: null, isAnonymous: true }),
+      ],
+    });
+    const { service } = makeService(event, [], createAvailabilityRepository());
+
+    await expect(service.heatmap("event-1")).resolves.toEqual({
+      totalParticipants: 3,
+      slots: [],
+    });
+  });
+
+  it("devuelve 404 si el evento no existe sin consultar el agregado", async () => {
+    const { service, availabilityRepository } = makeService(null);
+
+    await expect(service.heatmap("event-unknown")).rejects.toBeInstanceOf(NotFoundError);
+    expect(availabilityRepository.findHeatmapByEventId).not.toHaveBeenCalled();
+  });
+
+  it("rechaza un eventId inválido sin consultar persistencia", async () => {
+    const { service, eventRepository, availabilityRepository } = makeService();
+
+    await expect(service.heatmap(" ")).rejects.toBeInstanceOf(ValidationError);
+    expect(eventRepository.findById).not.toHaveBeenCalled();
+    expect(availabilityRepository.findHeatmapByEventId).not.toHaveBeenCalled();
   });
 });
