@@ -14,7 +14,7 @@ import type {
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
 import { createAvailabilityService } from "../src/services/availability.service.js";
-import { NotFoundError, ValidationError } from "../src/shared/errors/index.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../src/shared/errors/index.js";
 
 function makeEvent(overrides: Partial<Event> = {}): Event {
   return {
@@ -290,7 +290,7 @@ describe("AvailabilityService.heatmap", () => {
     ]);
     const { service } = makeService(event, [], availabilityRepository);
 
-    await expect(service.heatmap("event-1")).resolves.toEqual({
+    await expect(service.heatmap("user-organizer", "event-1")).resolves.toEqual({
       totalParticipants: 4,
       slots: [
         { weekDay: 0, hourBlock: 10, availableCount: 3 },
@@ -310,7 +310,7 @@ describe("AvailabilityService.heatmap", () => {
     });
     const { service } = makeService(event, [], createAvailabilityRepository());
 
-    await expect(service.heatmap("event-1")).resolves.toEqual({
+    await expect(service.heatmap("user-organizer", "event-1")).resolves.toEqual({
       totalParticipants: 3,
       slots: [],
     });
@@ -319,15 +319,26 @@ describe("AvailabilityService.heatmap", () => {
   it("devuelve 404 si el evento no existe sin consultar el agregado", async () => {
     const { service, availabilityRepository } = makeService(null);
 
-    await expect(service.heatmap("event-unknown")).rejects.toBeInstanceOf(NotFoundError);
+    await expect(service.heatmap("user-organizer", "event-unknown")).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
     expect(availabilityRepository.findHeatmapByEventId).not.toHaveBeenCalled();
   });
 
   it("rechaza un eventId inválido sin consultar persistencia", async () => {
     const { service, eventRepository, availabilityRepository } = makeService();
 
-    await expect(service.heatmap(" ")).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.heatmap("user-organizer", " ")).rejects.toBeInstanceOf(ValidationError);
     expect(eventRepository.findById).not.toHaveBeenCalled();
+    expect(availabilityRepository.findHeatmapByEventId).not.toHaveBeenCalled();
+  });
+
+  it("rechaza a un participante que no es organizador sin consultar el agregado", async () => {
+    const { service, availabilityRepository } = makeService(
+      makeEvent({ organizerId: "user-organizer" }),
+    );
+
+    await expect(service.heatmap("user-member", "event-1")).rejects.toBeInstanceOf(ForbiddenError);
     expect(availabilityRepository.findHeatmapByEventId).not.toHaveBeenCalled();
   });
 });
