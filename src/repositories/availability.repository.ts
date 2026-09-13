@@ -9,6 +9,12 @@ export interface AvailabilitySlot {
 
 export type AvailabilitySlotInput = Omit<AvailabilitySlot, "participantId" | "eventId">;
 
+export interface AvailabilityHeatmapSlot {
+  weekDay: number;
+  hourBlock: number;
+  availableCount: number;
+}
+
 export interface AvailabilityRepository {
   replaceForParticipant(
     eventId: string,
@@ -17,6 +23,8 @@ export interface AvailabilityRepository {
   ): Promise<void>;
 
   findForParticipant(eventId: string, participantId: string): Promise<AvailabilitySlot[]>;
+
+  findHeatmapByEventId(eventId: string): Promise<AvailabilityHeatmapSlot[]>;
 }
 
 export const availabilityRepository: AvailabilityRepository = {
@@ -51,5 +59,21 @@ export const availabilityRepository: AvailabilityRepository = {
       },
       orderBy: [{ weekDay: "asc" }, { hourBlock: "asc" }],
     });
+  },
+
+  // --> Cuenta filas en la db
+  async findHeatmapByEventId(eventId) {
+    const groupedSlots = await prisma.availabilitySlot.groupBy({
+      by: ["weekDay", "hourBlock"],
+      where: { eventId },
+      _count: { participantId: true },
+      orderBy: [{ weekDay: "asc" }, { hourBlock: "asc" }],
+    });
+
+    return groupedSlots.map((slot) => ({
+      weekDay: slot.weekDay,
+      hourBlock: slot.hourBlock,
+      availableCount: slot._count.participantId,
+    }));
   },
 };
