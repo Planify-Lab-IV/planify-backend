@@ -11,7 +11,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     user: { findUnique: vi.fn(), findFirst: vi.fn() },
     group: { findUnique: vi.fn(), create: vi.fn() },
     groupMember: { findUnique: vi.fn() },
-    event: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    event: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateManyAndReturn: vi.fn() },
     eventParticipant: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -403,7 +403,7 @@ describe("EventRepository.confirmSchedule", () => {
 
   it("persiste el horario y el estado confirmed", async () => {
     const startDateTime = new Date("2099-12-31T22:00:00.000Z");
-    vi.mocked(prisma.event.update).mockResolvedValueOnce({
+    const confirmedEvent = {
       id: "event-1",
       name: "Birthday",
       location: "Ana's house",
@@ -414,15 +414,25 @@ describe("EventRepository.confirmSchedule", () => {
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: new Date("2026-01-02T00:00:00Z"),
       participants: [],
-    } as never);
+    };
+    const updateEvent = vi.fn().mockResolvedValue([confirmedEvent]);
+    const findEvent = vi.fn().mockResolvedValue(confirmedEvent);
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) =>
+      callback({ event: { updateManyAndReturn: updateEvent, findUnique: findEvent } })) as never);
 
     await expect(eventRepository.confirmSchedule("event-1", startDateTime)).resolves.toMatchObject({
       status: "confirmed",
       startDateTime,
     });
-    expect(prisma.event.update).toHaveBeenCalledWith({
-      where: { id: "event-1" },
+    expect(updateEvent).toHaveBeenCalledWith({
+      where: { id: "event-1", status: { not: "cancelled" } },
       data: { status: "confirmed", startDateTime },
+    });
+    expect(findEvent).toHaveBeenCalledWith({
+      where: { id: "event-1" },
       include: { participants: true },
     });
   });
@@ -454,8 +464,19 @@ describe("PATCH /events/:eventId/confirm-schedule", () => {
       status: "confirmed",
       startDateTime: new Date(validBody.startDateTime),
     };
-    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
-    vi.mocked(prisma.event.update).mockResolvedValueOnce(confirmedEvent as never);
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce(event as never)
+      .mockResolvedValueOnce(confirmedEvent as never);
+    vi.mocked(prisma.event.updateManyAndReturn).mockResolvedValueOnce([confirmedEvent] as never);
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) =>
+      callback({
+        event: {
+          updateManyAndReturn: prisma.event.updateManyAndReturn,
+          findUnique: prisma.event.findUnique,
+        },
+      })) as never);
 
     const response = await request(app)
       .patch(`/events/${eventId}/confirm-schedule`)
@@ -468,10 +489,9 @@ describe("PATCH /events/:eventId/confirm-schedule", () => {
       status: "confirmed",
       startDateTime: validBody.startDateTime,
     });
-    expect(prisma.event.update).toHaveBeenCalledWith({
-      where: { id: eventId },
+    expect(prisma.event.updateManyAndReturn).toHaveBeenCalledWith({
+      where: { id: eventId, status: { not: "cancelled" } },
       data: { status: "confirmed", startDateTime: new Date(validBody.startDateTime) },
-      include: { participants: true },
     });
   });
 

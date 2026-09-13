@@ -57,8 +57,8 @@ function createInMemoryEventRepository(events: Event[]): EventRepository {
     }),
     confirmSchedule: vi.fn(async (id, startDateTime) => {
       const event = records.get(id);
-      if (!event) {
-        throw new Error("El evento debe existir antes de confirmar su horario");
+      if (!event || event.status === "cancelled") {
+        return null;
       }
 
       const confirmedEvent = { ...event, status: "confirmed" as const, startDateTime };
@@ -353,6 +353,15 @@ describe("EventService.confirmSchedule", () => {
       service.confirmSchedule("user-organizer", "event-1", new Date("2099-12-31T22:00:00Z")),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(eventRepository.confirmSchedule).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 400 si el evento se cancela antes de la actualización atómica", async () => {
+    const { service, eventRepository } = makeService();
+    vi.mocked(eventRepository.confirmSchedule).mockResolvedValueOnce(null);
+
+    await expect(
+      service.confirmSchedule("user-organizer", "event-1", new Date("2099-12-31T22:00:00Z")),
+    ).rejects.toBeInstanceOf(ValidationError);
   });
 
   it("permite volver a confirmar un evento para actualizar su horario", async () => {

@@ -183,7 +183,13 @@ export function createEventService(
         throw new ValidationError("No se puede confirmar el horario de un evento cancelado");
       }
 
-      return eventRepository.confirmSchedule(eventId, startDateTime);
+      const confirmedEvent = await eventRepository.confirmSchedule(eventId, startDateTime);
+
+      if (!confirmedEvent) {
+        throw new ValidationError("No se puede confirmar el horario de un evento cancelado");
+      }
+
+      return confirmedEvent;
     },
 
     async answerAttendance(eventId, actor, state) {
