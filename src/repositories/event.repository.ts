@@ -9,7 +9,7 @@ export interface EventParticipant {
   isOrganizer: boolean;
 }
 
-export const eventStatuses = ["active", "cancelled"] as const;
+export const eventStatuses = ["active", "confirmed", "cancelled"] as const;
 export type EventStatus = (typeof eventStatuses)[number];
 
 function parseEventStatus(status: string): EventStatus {
@@ -27,6 +27,7 @@ export interface Event {
   name: string;
   location: string;
   status: EventStatus;
+  startDateTime: Date | null;
   createdAt: Date;
   updatedAt: Date;
   participants: EventParticipant[];
@@ -52,6 +53,7 @@ export interface EventRepository {
   findById(id: string): Promise<Event | null>;
   createAtomic(params: CreateEventParams): Promise<Event>;
   cancelAtomic(id: string): Promise<Event>;
+  confirmSchedule(id: string, startDateTime: Date): Promise<Event | null>;
 }
 
 export const eventRepository: EventRepository = {
@@ -126,6 +128,33 @@ export const eventRepository: EventRepository = {
       });
 
       return { ...event, status: parseEventStatus(event.status) };
+    });
+  },
+
+  // --> Establece el evento como confirmado junto al horario de comienzo
+  async confirmSchedule(id: string, startDateTime: Date): Promise<Event | null> {
+    return prisma.$transaction(async (tx) => {
+      const [updatedEvent] = await tx.event.updateManyAndReturn({
+        where: {
+          id,
+          status: { not: "cancelled" },
+        },
+        data: {
+          status: "confirmed",
+          startDateTime,
+        },
+      });
+
+      if (!updatedEvent) {
+        return null;
+      }
+
+      const event = await tx.event.findUnique({
+        where: { id },
+        include: { participants: true },
+      });
+
+      return event ? { ...event, status: parseEventStatus(event.status) } : null;
     });
   },
 };

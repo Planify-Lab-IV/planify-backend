@@ -13,8 +13,26 @@ export const createEventSchema = z
 
 export type CreateEventDTO = z.infer<typeof createEventSchema>;
 
+export const confirmScheduleSchema = z
+  .object({
+    startDateTime: z.string().datetime({ offset: true }), // --> offset entre UTC y hora local
+  })
+  .strict();
+
+export type ConfirmScheduleDTO = z.infer<typeof confirmScheduleSchema>;
+
 export function validateCreateEventDTO(input: unknown): CreateEventDTO {
   const result = createEventSchema.safeParse(input);
+
+  if (!result.success) {
+    throw new ValidationError("El body contiene campos inválidos");
+  }
+
+  return result.data;
+}
+
+export function validateConfirmScheduleDTO(input: unknown): ConfirmScheduleDTO {
+  const result = confirmScheduleSchema.safeParse(input);
 
   if (!result.success) {
     throw new ValidationError("El body contiene campos inválidos");

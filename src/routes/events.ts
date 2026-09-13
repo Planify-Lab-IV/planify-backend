@@ -50,6 +50,10 @@ router.put("/events/:id/cancel", requireAuth, (req, res, next) =>
   eventController.cancel(req, res, next),
 );
 
+router.patch("/events/:eventId/confirm-schedule", requireAuth, (req, res, next) =>
+  eventController.confirmSchedule(req, res, next),
+);
+
 router.put("/events/:eventId/participants/me/attendance", requireAttendanceAuth, (req, res, next) =>
   eventController.answerAttendance(req, res, next),
 );

@@ -10,6 +10,7 @@
 
 - [ ] `npm run format:check (Prettier)`
 - [ ] `npm run lint (EsLint)`
+- Evidencia visual de la implementacion esperada (endpoints por ejemplo):
 
 ## Checklist de documentación
 

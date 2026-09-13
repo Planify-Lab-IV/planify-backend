@@ -11,7 +11,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     user: { findUnique: vi.fn(), findFirst: vi.fn() },
     group: { findUnique: vi.fn(), create: vi.fn() },
     groupMember: { findUnique: vi.fn() },
-    event: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    event: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn(), updateManyAndReturn: vi.fn() },
     eventParticipant: {
       findUnique: vi.fn(),
       findFirst: vi.fn(),
@@ -395,6 +395,172 @@ describe("EventRepository.cancelAtomic", () => {
       where: { eventId: "event-1", isAnonymous: true },
       data: { pinHash: null },
     });
+  });
+});
+
+describe("EventRepository.confirmSchedule", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("persiste el horario y el estado confirmed", async () => {
+    const startDateTime = new Date("2099-12-31T22:00:00.000Z");
+    const confirmedEvent = {
+      id: "event-1",
+      name: "Birthday",
+      location: "Ana's house",
+      groupId: "group-1",
+      organizerId: "user-organizer-1",
+      status: "confirmed",
+      startDateTime,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-02T00:00:00Z"),
+      participants: [],
+    };
+    const updateEvent = vi.fn().mockResolvedValue([confirmedEvent]);
+    const findEvent = vi.fn().mockResolvedValue(confirmedEvent);
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) =>
+      callback({ event: { updateManyAndReturn: updateEvent, findUnique: findEvent } })) as never);
+
+    await expect(eventRepository.confirmSchedule("event-1", startDateTime)).resolves.toMatchObject({
+      status: "confirmed",
+      startDateTime,
+    });
+    expect(updateEvent).toHaveBeenCalledWith({
+      where: { id: "event-1", status: { not: "cancelled" } },
+      data: { status: "confirmed", startDateTime },
+    });
+    expect(findEvent).toHaveBeenCalledWith({
+      where: { id: "event-1" },
+      include: { participants: true },
+    });
+  });
+});
+
+describe("PATCH /events/:eventId/confirm-schedule", () => {
+  const eventId = "event-confirm-1";
+  const organizerId = "user-organizer";
+  const organizerToken = createSessionTokenService(env.JWT_SECRET).sign(organizerId);
+  const validBody = { startDateTime: "2099-12-31T22:00:00.000Z" };
+  const event = {
+    id: eventId,
+    name: "Birthday",
+    location: "Ana's house",
+    groupId: "group-1",
+    organizerId,
+    status: "active",
+    startDateTime: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    participants: [],
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("confirma el horario del organizador y devuelve el evento actualizado", async () => {
+    const confirmedEvent = {
+      ...event,
+      status: "confirmed",
+      startDateTime: new Date(validBody.startDateTime),
+    };
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce(event as never)
+      .mockResolvedValueOnce(confirmedEvent as never);
+    vi.mocked(prisma.event.updateManyAndReturn).mockResolvedValueOnce([confirmedEvent] as never);
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) =>
+      callback({
+        event: {
+          updateManyAndReturn: prisma.event.updateManyAndReturn,
+          findUnique: prisma.event.findUnique,
+        },
+      })) as never);
+
+    const response = await request(app)
+      .patch(`/events/${eventId}/confirm-schedule`)
+      .set("Authorization", `Bearer ${organizerToken}`)
+      .send(validBody);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: eventId,
+      status: "confirmed",
+      startDateTime: validBody.startDateTime,
+    });
+    expect(prisma.event.updateManyAndReturn).toHaveBeenCalledWith({
+      where: { id: eventId, status: { not: "cancelled" } },
+      data: { status: "confirmed", startDateTime: new Date(validBody.startDateTime) },
+    });
+  });
+
+  it("requiere autenticación", async () => {
+    const response = await request(app)
+      .patch(`/events/${eventId}/confirm-schedule`)
+      .send(validBody);
+
+    expect(response.status).toBe(401);
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {},
+    { startDateTime: "2099-12-31 22:00:00" },
+    { startDateTime: "2000-01-01T00:00:00.000Z" },
+    { startDateTime: validBody.startDateTime, extra: true },
+  ])("devuelve 400 para un body inválido o una fecha pasada: %o", async (body) => {
+    const response = await request(app)
+      .patch(`/events/${eventId}/confirm-schedule`)
+      .set("Authorization", `Bearer ${organizerToken}`)
+      .send(body);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("INVALID_DATA");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .patch(`/events/${eventId}/confirm-schedule`)
+      .set("Authorization", `Bearer ${organizerToken}`)
+      .send(validBody);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si quien confirma no es el organizador", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    const outsiderToken = createSessionTokenService(env.JWT_SECRET).sign("user-outsider");
+
+    const response = await request(app)
+      .patch(`/events/${eventId}/confirm-schedule`)
+      .set("Authorization", `Bearer ${outsiderToken}`)
+      .send(validBody);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 400 si el evento está cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .patch(`/events/${eventId}/confirm-schedule`)
+      .set("Authorization", `Bearer ${organizerToken}`)
+      .send(validBody);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("INVALID_DATA");
+    expect(prisma.event.update).not.toHaveBeenCalled();
   });
 });
 
