@@ -20,6 +20,7 @@ export interface AuthResult {
 
 export interface AuthService {
   login(dto: LoginDTO): Promise<AuthResult>;
+  getCurrentUser(userId: string): Promise<User>;
 }
 
 export function createAuthService(
@@ -64,6 +65,16 @@ export function createAuthService(
         },
         token,
       };
+    },
+
+    async getCurrentUser(userId: string): Promise<User> {
+      const user = await userRepository.findById(userId);
+
+      if (!user) {
+        throw new UnauthorizedError("La sesión ya no corresponde a un usuario activo");
+      }
+
+      return user;
     },
   };
 }
