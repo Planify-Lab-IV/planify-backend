@@ -6,6 +6,7 @@ import { validateAvailabilityRequestDTO } from "../validators/availability/avail
 export interface AvailabilityController {
   save(req: Request, res: Response, next: NextFunction): Promise<void>;
   load(req: Request, res: Response, next: NextFunction): Promise<void>;
+  heatmap(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 
 export function createAvailabilityController(
@@ -26,6 +27,14 @@ export function createAvailabilityController(
     }
 
     return req.attendanceActor;
+  }
+
+  function getAuthenticatedUserId(req: Request): string {
+    if (!req.userId) {
+      throw new UnauthorizedError("Usuario no autenticado");
+    }
+
+    return req.userId;
   }
 
   return {
@@ -49,6 +58,18 @@ export function createAvailabilityController(
         const slots = await availabilityService.load(eventId, actor);
 
         res.status(200).json({ slots });
+      } catch (error) {
+        next(error);
+      }
+    },
+
+    async heatmap(req, res, next) {
+      try {
+        const eventId = getEventId(req);
+        const userId = getAuthenticatedUserId(req);
+        const heatmap = await availabilityService.heatmap(userId, eventId);
+
+        res.status(200).json(heatmap);
       } catch (error) {
         next(error);
       }

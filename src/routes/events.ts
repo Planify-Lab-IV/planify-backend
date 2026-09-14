@@ -73,6 +73,10 @@ router.get("/events/:eventId/availability", requireAttendanceAuth, (req, res, ne
   availabilityController.load(req, res, next),
 );
 
+router.get("/events/:eventId/availability/heatmap", requireAuth, (req, res, next) =>
+  availabilityController.heatmap(req, res, next),
+);
+
 // INVITATIONS
 
 const invitationsService = createInvitationsService(eventRepository, invitationRepository);

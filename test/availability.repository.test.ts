@@ -8,6 +8,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       deleteMany: vi.fn(),
       createMany: vi.fn(),
       findMany: vi.fn(),
+      groupBy: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -95,6 +96,25 @@ describe("AvailabilityRepository", () => {
         weekDay: true,
         hourBlock: true,
       },
+      orderBy: [{ weekDay: "asc" }, { hourBlock: "asc" }],
+    });
+  });
+
+  it("agrupa los slots del evento y los mapea a conteos disponibles", async () => {
+    vi.mocked(prisma.availabilitySlot.groupBy).mockResolvedValueOnce([
+      { weekDay: 0, hourBlock: 9, _count: { participantId: 3 } },
+      { weekDay: 1, hourBlock: 18, _count: { participantId: 1 } },
+    ] as never);
+
+    await expect(availabilityRepository.findHeatmapByEventId(eventId)).resolves.toEqual([
+      { weekDay: 0, hourBlock: 9, availableCount: 3 },
+      { weekDay: 1, hourBlock: 18, availableCount: 1 },
+    ]);
+
+    expect(prisma.availabilitySlot.groupBy).toHaveBeenCalledWith({
+      by: ["weekDay", "hourBlock"],
+      where: { eventId },
+      _count: { participantId: true },
       orderBy: [{ weekDay: "asc" }, { hourBlock: "asc" }],
     });
   });

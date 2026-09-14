@@ -22,6 +22,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       deleteMany: vi.fn(),
       createMany: vi.fn(),
       findMany: vi.fn(),
+      groupBy: vi.fn(),
     },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
@@ -266,5 +267,78 @@ describe("/events/:eventId/availability", () => {
     expect(response.status).toBe(404);
     expect(response.body.error).toBe("NOT_FOUND");
     expect(prisma.availabilitySlot.deleteMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /events/:eventId/availability/heatmap", () => {
+  const eventId = "event-heatmap-1";
+  const organizerId = "user-organizer";
+  const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
+  const organizerToken = sessionTokenService.sign(organizerId);
+  const event = {
+    id: eventId,
+    groupId: "group-1",
+    organizerId,
+    name: "Cumpleaños",
+    location: "Casa de Ana",
+    status: "active",
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    participants: [
+      { id: "participant-organizer", eventId, userId: organizerId, isOrganizer: true },
+      { id: "participant-member", eventId, userId: "user-member", isOrganizer: false },
+      { id: "participant-anonymous", eventId, userId: null, isOrganizer: false },
+    ],
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("devuelve el heatmap al organizador", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.availabilitySlot.groupBy).mockResolvedValueOnce([
+      { weekDay: 1, hourBlock: 10, _count: { participantId: 2 } },
+    ] as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}/availability/heatmap`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      totalParticipants: 3,
+      slots: [{ weekDay: 1, hourBlock: 10, availableCount: 2 }],
+    });
+    expect(prisma.availabilitySlot.groupBy).toHaveBeenCalledOnce();
+  });
+
+  it("requiere una sesión de usuario registrada", async () => {
+    const response = await request(app).get(`/events/${eventId}/availability/heatmap`);
+
+    expect(response.status).toBe(401);
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 a un usuario que no organiza el evento", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .get(`/events/${eventId}/availability/heatmap`)
+      .set("Authorization", `Bearer ${sessionTokenService.sign("user-member")}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(prisma.availabilitySlot.groupBy).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .get(`/events/${eventId}/availability/heatmap`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+    expect(prisma.availabilitySlot.groupBy).not.toHaveBeenCalled();
   });
 });
