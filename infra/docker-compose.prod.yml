@@ -1,0 +1,12 @@
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: planify-backend:latest
+    container_name: planify-api
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-80}:${PORT:-3000}"
+    env_file:
+      - ../.env
