@@ -20,6 +20,9 @@ import { createInvitationController } from "../controllers/invitation.controller
 import { availabilityRepository } from "../repositories/availability.repository.js";
 import { createAvailabilityService } from "../services/availability.service.js";
 import { createAvailabilityController } from "../controllers/availability.controller.js";
+import { expenseRepository } from "../repositories/expense.repository.js";
+import { createExpenseService } from "../services/expense.service.js";
+import { createExpenseController } from "../controllers/expense.controller.js";
 
 const router = Router();
 
@@ -77,7 +80,12 @@ router.get("/events/:eventId/availability/heatmap", requireAuth, (req, res, next
   availabilityController.heatmap(req, res, next),
 );
 
-// INVITATIONS
+const expenseService = createExpenseService(expenseRepository, participantRepository);
+const expenseController = createExpenseController(expenseService);
+
+router.post("/events/:eventId/expenses", requireAttendanceAuth, (req, res, next) =>
+  expenseController.create(req, res, next),
+);
 
 const invitationsService = createInvitationsService(eventRepository, invitationRepository);
 const invitationController = createInvitationController(invitationsService);
@@ -87,8 +95,6 @@ router.post("/events/:eventId/invitations", requireAuth, (req, res, next) =>
 );
 
 router.get("/invitations/:token", (req, res, next) => invitationController.resolve(req, res, next));
-
-// PARTICIPANT
 
 const passwordHasher = createPasswordHasher();
 
