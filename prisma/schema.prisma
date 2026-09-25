@@ -50,16 +50,17 @@ model Event {
   name    String @map("nombre")
   status  String @default("active") @map("estado")
 
-  organizerId String   @map("creado_por_usuario_id")
-  location    String   @map("lugar_texto")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  organizerId   String    @map("creado_por_usuario_id")
+  location      String    @map("lugar_texto")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
   startDateTime DateTime? @map("start_date_time")
 
   group        Group              @relation(fields: [groupId], references: [id])
   organizer    User               @relation("EventOrganizer", fields: [organizerId], references: [id])
   participants EventParticipant[]
   invitations  Invitation[]
+  Expense      Expense[]
 
   @@map("evento")
 }
@@ -90,6 +91,9 @@ model EventParticipant {
   user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   attendanceState   AttendanceState    @default(not_confirmed) @map("attendance_state")
   availabilitySlots AvailabilitySlot[]
+  Expense           Expense[]
+  ExpensePayer      ExpensePayer[]
+  ExpenseDebtor     ExpenseDebtor[]
 
   @@unique([id, eventId])
   @@unique([eventId, username])
@@ -116,4 +120,50 @@ enum AttendanceState {
   not_confirmed
   confirmed
   rejected
+}
+
+model Expense {
+  id                     String   @id @default(uuid())
+  eventId                String   @map("evento_id")
+  description            String   @map("descripcion")
+  totalAmountCents       Int      @map("monto_total_centavos")
+  createdByParticipantId String   @map("creado_por_participante_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  event     Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy EventParticipant @relation(fields: [createdByParticipantId, eventId], references: [id, eventId])
+  payers    ExpensePayer[]
+  debtors   ExpenseDebtor[]
+
+  @@unique([id, eventId])
+  @@index([eventId])
+  @@map("gasto")
+}
+
+model ExpensePayer {
+  expenseId     String @map("gasto_id")
+  participantId String @map("participante_id")
+  amountCents   Int    @map("monto_centavos")
+  eventId       String @map("evento_id")
+
+  expense     Expense          @relation(fields: [expenseId, eventId], references: [id, eventId], onDelete: Cascade)
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId])
+
+  @@id([expenseId, participantId])
+  @@index([participantId, eventId])
+  @@map("aportante_gasto")
+}
+
+model ExpenseDebtor {
+  expenseId     String @map("gasto_id")
+  participantId String @map("participante_id")
+  amountCents   Int    @map("monto_centavos")
+  eventId       String @map("evento_id")
+
+  expense     Expense          @relation(fields: [expenseId, eventId], references: [id, eventId], onDelete: Cascade)
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId])
+
+  @@id([expenseId, participantId])
+  @@index([participantId, eventId])
+  @@map("deudor_gasto")
 }
