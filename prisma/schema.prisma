@@ -131,10 +131,11 @@ model Expense {
   createdAt              DateTime @default(now()) @map("created_at")
 
   event     Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  createdBy EventParticipant @relation(fields: [createdByParticipantId], references: [id])
+  createdBy EventParticipant @relation(fields: [createdByParticipantId, eventId], references: [id, eventId])
   payers    ExpensePayer[]
   debtors   ExpenseDebtor[]
 
+  @@unique([id, eventId])
   @@index([eventId])
   @@map("gasto")
 }
@@ -143,11 +144,13 @@ model ExpensePayer {
   expenseId     String @map("gasto_id")
   participantId String @map("participante_id")
   amountCents   Int    @map("monto_centavos")
+  eventId       String @map("evento_id")
 
-  expense     Expense          @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  participant EventParticipant @relation(fields: [participantId], references: [id])
+  expense     Expense          @relation(fields: [expenseId, eventId], references: [id, eventId], onDelete: Cascade)
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId])
 
   @@id([expenseId, participantId])
+  @@index([participantId, eventId])
   @@map("aportante_gasto")
 }
 
@@ -155,10 +158,12 @@ model ExpenseDebtor {
   expenseId     String @map("gasto_id")
   participantId String @map("participante_id")
   amountCents   Int    @map("monto_centavos")
+  eventId       String @map("evento_id")
 
-  expense     Expense          @relation(fields: [expenseId], references: [id], onDelete: Cascade)
-  participant EventParticipant @relation(fields: [participantId], references: [id])
+  expense     Expense          @relation(fields: [expenseId, eventId], references: [id, eventId], onDelete: Cascade)
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId])
 
   @@id([expenseId, participantId])
+  @@index([participantId, eventId])
   @@map("deudor_gasto")
 }
