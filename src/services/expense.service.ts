@@ -4,9 +4,10 @@ import type {
   ExpenseRepository,
   ExpenseShareInput,
 } from "../repositories/expense.repository.js";
+import type { EventRepository } from "../repositories/event.repository.js";
 import type { ParticipantRepository } from "../repositories/participant.repository.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
-import { ValidationError } from "../shared/errors/index.js";
+import { EventUnavailableError, NotFoundError, ValidationError } from "../shared/errors/index.js";
 import type { CreateExpenseDTO } from "../validators/expense/create.expense.validator.js";
 
 export interface ExpenseService {
@@ -23,12 +24,21 @@ function sumAmounts(shares: ExpenseShareInput[]): number {
 
 export function createExpenseService(
   expenseRepository: ExpenseRepository,
+  eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
 ): ExpenseService {
   return {
     async createExpense(eventId, actor, dto) {
       if (typeof eventId !== "string" || eventId.trim() === "") {
         throw new ValidationError("El eventId es requerido");
+      }
+
+      const event = await eventRepository.findById(eventId);
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+      if (event.status === "cancelled") {
+        throw new EventUnavailableError();
       }
 
       if (hasRepeatedParticipantIds(dto.payers)) {

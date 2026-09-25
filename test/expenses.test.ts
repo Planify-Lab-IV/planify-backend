@@ -7,6 +7,9 @@ import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    event: {
+      findUnique: vi.fn(),
+    },
     eventParticipant: {
       findMany: vi.fn(),
       findFirst: vi.fn(),
@@ -58,6 +61,11 @@ describe("POST /events/:eventId/expenses", () => {
       debtors: body.debtors.map((debtor) => ({ ...debtor, expenseId: "expense-1" })),
     };
 
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "active",
+      participants: [],
+    } as never);
     vi.mocked(prisma.eventParticipant.findMany).mockResolvedValueOnce(participants as never);
     vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce({
       ...participants[0],
@@ -102,5 +110,36 @@ describe("POST /events/:eventId/expenses", () => {
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("UNAUTHORIZED");
     expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+  });
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 409 si el evento esta cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "cancelled",
+      participants: [],
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EVENT_UNAVAILABLE");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
   });
 });
