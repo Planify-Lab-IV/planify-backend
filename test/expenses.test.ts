@@ -11,6 +11,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       findUnique: vi.fn(),
     },
     eventParticipant: {
+      findUnique: vi.fn(),
       findMany: vi.fn(),
       findFirst: vi.fn(),
     },
@@ -139,6 +140,54 @@ describe("POST /events/:eventId/expenses", () => {
 
     expect(response.status).toBe(409);
     expect(response.body.error).toBe("EVENT_UNAVAILABLE");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si el usuario no participa del evento", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "active",
+      participants: [],
+    } as never);
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si el token anonimo pertenece a otro evento", async () => {
+    const otherEventId = "event-2";
+    const anonymousParticipant = {
+      id: "participant-anonymous",
+      eventId: otherEventId,
+      username: "invitado",
+      isAnonymous: true,
+    };
+    const anonymousToken = createSessionTokenService(env.JWT_SECRET).signParticipant(
+      anonymousParticipant.id,
+      otherEventId,
+    );
+
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce({ id: otherEventId, status: "active", participants: [] } as never)
+      .mockResolvedValueOnce({ id: eventId, status: "active", participants: [] } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${anonymousToken}`)
+      .send(body);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
     expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
     expect(prisma.expense.create).not.toHaveBeenCalled();
   });
