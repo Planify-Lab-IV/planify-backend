@@ -13,7 +13,7 @@ export function validateAssignTaskDTO(input: unknown): AssignTaskDTO {
   const result = assignTaskSchema.safeParse(input);
 
   if (!result.success) {
-    throw new ValidationError("El body contiene campos invÃ¡lidos");
+    throw new ValidationError("El body contiene campos inválidos");
   }
 
   return result.data;

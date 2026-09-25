@@ -122,7 +122,7 @@ describe("rutas de tareas", () => {
     expect(response.body.assignedToParticipantId).toBe(participant.id);
   });
 
-  it("rechaza tomar una tarea que ya tiene dueÃ±o", async () => {
+  it("rechaza tomar una tarea que ya tiene dueño", async () => {
     vi.mocked(prisma.task.findUnique).mockResolvedValueOnce({
       ...task,
       status: "pending",
@@ -156,7 +156,7 @@ describe("rutas de tareas", () => {
     expect(response.body.assignedToParticipantId).toBe(assignee.id);
   });
 
-  it("rechaza asignar una tarea si quien actÃºa no es organizador", async () => {
+  it("rechaza asignar una tarea si quien actúa no es organizador", async () => {
     vi.mocked(prisma.task.findUnique).mockResolvedValueOnce(task as never);
     vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(participant as never);
 
@@ -203,7 +203,7 @@ describe("rutas de tareas", () => {
     expect(prisma.task.update).not.toHaveBeenCalled();
   });
 
-  it("permite crear una tarea con una sesiÃ³n anÃ³nima vÃ¡lida", async () => {
+  it("permite crear una tarea con una sesión anónima válida", async () => {
     const anonymousParticipant = {
       ...participant,
       id: "participant-anonymous",
@@ -227,7 +227,7 @@ describe("rutas de tareas", () => {
     expect(response.body.createdByParticipantId).toBe(anonymousParticipant.id);
   });
 
-  it("requiere autenticaciÃ³n para listar tareas", async () => {
+  it("requiere autenticación para listar tareas", async () => {
     const response = await request(app).get(`/events/${eventId}/tasks`);
 
     expect(response.status).toBe(401);

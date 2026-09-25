@@ -13,7 +13,7 @@ export function validateCreateTaskDTO(input: unknown): CreateTaskDTO {
   const result = createTaskSchema.safeParse(input);
 
   if (!result.success) {
-    throw new ValidationError("El body contiene campos invÃ¡lidos");
+    throw new ValidationError("El body contiene campos inválidos");
   }
 
   return result.data;

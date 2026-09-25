@@ -122,7 +122,7 @@ function makeService(
 }
 
 describe("TaskService", () => {
-  it("crea una tarea sin asignar para el participante que actÃºa", async () => {
+  it("crea una tarea sin asignar para el participante que actúa", async () => {
     const { service, taskRepository } = makeService([]);
 
     await expect(
@@ -154,7 +154,7 @@ describe("TaskService", () => {
     ]);
   });
 
-  it("permite a un participante anÃ³nimo crear una tarea en su evento", async () => {
+  it("permite a un participante anónimo crear una tarea en su evento", async () => {
     const anonymousParticipant = makeParticipant({
       id: "participant-anonymous",
       userId: null,
@@ -191,7 +191,7 @@ describe("TaskService", () => {
     });
   });
 
-  it("rechaza tomar una tarea que ya tiene dueÃ±o", async () => {
+  it("rechaza tomar una tarea que ya tiene dueño", async () => {
     const { service, taskRepository } = makeService([
       makeTask({ status: "pending", assignedToParticipantId: "participant-other" }),
     ]);
@@ -221,7 +221,7 @@ describe("TaskService", () => {
     });
   });
 
-  it("rechaza la asignaciÃ³n de quien no es organizador", async () => {
+  it("rechaza la asignación de quien no es organizador", async () => {
     const assignee = makeParticipant({ id: "participant-beto", userId: "user-beto" });
     const { service, taskRepository } = makeService([makeTask()], [makeParticipant(), assignee]);
 
