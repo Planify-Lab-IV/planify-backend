@@ -1,7 +1,11 @@
 // Catchea excepciones de la peticion HTTP de un evento
 import type { Request, Response, NextFunction } from "express";
 import type { EventService } from "../services/event.service.js";
-import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
+import {
+  getAttendanceActor,
+  getAuthenticatedUserId,
+  getEventId,
+} from "../shared/request.helpers.js";
 import {
   validateConfirmScheduleDTO,
   validateCreateEventDTO,
@@ -22,15 +26,8 @@ export function createEventController(eventService: EventService): EventControll
   return {
     async getById(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const eventId = req.params.eventId;
-        if (typeof eventId !== "string" || eventId.trim() === "") {
-          throw new ValidationError("El eventId es requerido");
-        }
-
-        const actor = req.attendanceActor;
-        if (!actor) {
-          throw new UnauthorizedError("Usuario no autenticado");
-        }
+        const eventId = getEventId(req);
+        const actor = getAttendanceActor(req);
 
         const event = await eventService.getById(eventId, actor);
         res.status(200).json(toEventResponseDTO(event));
@@ -41,15 +38,8 @@ export function createEventController(eventService: EventService): EventControll
 
     async answerAttendance(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const eventId = req.params.eventId;
-        if (typeof eventId !== "string" || eventId.trim() === "") {
-          throw new ValidationError("El eventId es requerido");
-        }
-
-        const actor = req.attendanceActor;
-        if (!actor) {
-          throw new UnauthorizedError("Usuario no autenticado");
-        }
+        const eventId = getEventId(req);
+        const actor = getAttendanceActor(req);
 
         const dto = validateAttendanceResponseDTO(req.body);
         const participant = await eventService.answerAttendance(eventId, actor, dto.state);
@@ -61,15 +51,8 @@ export function createEventController(eventService: EventService): EventControll
 
     async cancel(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const userId = req.userId;
-        if (!userId) {
-          throw new UnauthorizedError("Usuario no autenticado");
-        }
-
-        const eventId = req.params.id;
-        if (typeof eventId !== "string" || eventId.trim() === "") {
-          throw new ValidationError("El eventId es requerido");
-        }
+        const userId = getAuthenticatedUserId(req);
+        const eventId = getEventId(req);
 
         const event = await eventService.cancel(userId, eventId);
         res.status(200).json(toEventResponseDTO(event));
@@ -80,15 +63,8 @@ export function createEventController(eventService: EventService): EventControll
 
     async confirmSchedule(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const userId = req.userId;
-        if (!userId) {
-          throw new UnauthorizedError("Usuario no autenticado");
-        }
-
-        const eventId = req.params.eventId;
-        if (typeof eventId !== "string" || eventId.trim() === "") {
-          throw new ValidationError("El eventId es requerido");
-        }
+        const userId = getAuthenticatedUserId(req);
+        const eventId = getEventId(req);
 
         const dto = validateConfirmScheduleDTO(req.body);
         const event = await eventService.confirmSchedule(
@@ -105,10 +81,7 @@ export function createEventController(eventService: EventService): EventControll
 
     async create(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const organizerId = req.userId;
-        if (!organizerId) {
-          throw new UnauthorizedError("Usuario no autenticado");
-        }
+        const organizerId = getAuthenticatedUserId(req);
 
         const dto = validateCreateEventDTO(req.body);
         const event = await eventService.createEvent(organizerId, dto);

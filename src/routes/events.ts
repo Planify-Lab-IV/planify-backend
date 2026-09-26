@@ -21,8 +21,11 @@ import { availabilityRepository } from "../repositories/availability.repository.
 import { createAvailabilityService } from "../services/availability.service.js";
 import { createAvailabilityController } from "../controllers/availability.controller.js";
 import { expenseRepository } from "../repositories/expense.repository.js";
+import { debtRepository } from "../repositories/debt.repository.js";
+import { createDebtService } from "../services/debt.service.js";
 import { createExpenseService } from "../services/expense.service.js";
 import { createExpenseController } from "../controllers/expense.controller.js";
+import { createDebtController } from "../controllers/debt.controller.js";
 
 const router = Router();
 
@@ -49,7 +52,7 @@ router.get("/events/:eventId", requireAttendanceAuth, (req, res, next) =>
   eventController.getById(req, res, next),
 );
 
-router.put("/events/:id/cancel", requireAuth, (req, res, next) =>
+router.put("/events/:eventId/cancel", requireAuth, (req, res, next) =>
   eventController.cancel(req, res, next),
 );
 
@@ -80,15 +83,22 @@ router.get("/events/:eventId/availability/heatmap", requireAuth, (req, res, next
   availabilityController.heatmap(req, res, next),
 );
 
+const debtService = createDebtService(expenseRepository, debtRepository, eventRepository);
+const debtController = createDebtController(debtService);
 const expenseService = createExpenseService(
   expenseRepository,
   eventRepository,
   participantRepository,
+  debtService,
 );
 const expenseController = createExpenseController(expenseService);
 
 router.post("/events/:eventId/expenses", requireAttendanceAuth, (req, res, next) =>
   expenseController.create(req, res, next),
+);
+
+router.get("/events/:eventId/debts", requireAttendanceAuth, (req, res, next) =>
+  debtController.listEventDebts(req, res, next),
 );
 
 const invitationsService = createInvitationsService(eventRepository, invitationRepository);

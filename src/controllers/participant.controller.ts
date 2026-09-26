@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from "express";
 import type { ParticipantService } from "../services/participant.service.js";
-import { ValidationError } from "../shared/errors/index.js";
+import { getEventId } from "../shared/request.helpers.js";
 import { validateAnonymousParticipantDTO } from "../validators/participant/anonimous.participant.validator.js";
 
 export interface ParticipantController {
@@ -13,11 +13,7 @@ export function createParticipantController(
   return {
     async enterAnonymous(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const eventId = req.params.eventId;
-
-        if (typeof eventId !== "string" || eventId.trim() === "") {
-          throw new ValidationError("El eventId es requerido");
-        }
+        const eventId = getEventId(req);
 
         const dto = validateAnonymousParticipantDTO(req.body);
         const result = await participantService.enterAnonymous(eventId, dto);
