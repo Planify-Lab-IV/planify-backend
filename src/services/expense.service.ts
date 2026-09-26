@@ -4,9 +4,15 @@ import type {
   ExpenseRepository,
   ExpenseShareInput,
 } from "../repositories/expense.repository.js";
+import type { EventRepository } from "../repositories/event.repository.js";
 import type { ParticipantRepository } from "../repositories/participant.repository.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
-import { ValidationError } from "../shared/errors/index.js";
+import {
+  EventUnavailableError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "../shared/errors/index.js";
 import type { CreateExpenseDTO } from "../validators/expense/create.expense.validator.js";
 
 export interface ExpenseService {
@@ -23,12 +29,21 @@ function sumAmounts(shares: ExpenseShareInput[]): number {
 
 export function createExpenseService(
   expenseRepository: ExpenseRepository,
+  eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
 ): ExpenseService {
   return {
     async createExpense(eventId, actor, dto) {
       if (typeof eventId !== "string" || eventId.trim() === "") {
         throw new ValidationError("El eventId es requerido");
+      }
+
+      const event = await eventRepository.findById(eventId);
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+      if (event.status === "cancelled") {
+        throw new EventUnavailableError();
       }
 
       if (hasRepeatedParticipantIds(dto.payers)) {
@@ -48,8 +63,31 @@ export function createExpenseService(
         throw new ValidationError("La suma de deudores debe coincidir con el total del gasto");
       }
 
-      if (actor.type === "anonymousParticipant" && actor.eventId !== eventId) {
-        throw new ValidationError("El participante no pertenece al evento");
+      let createdByParticipantId: string;
+      if (actor.type === "user") {
+        const creator = await participantRepository.findAttendanceByEventIdAndUserId(
+          eventId,
+          actor.userId,
+        );
+
+        if (!creator) {
+          throw new ForbiddenError("El creador no pertenece al evento");
+        }
+
+        createdByParticipantId = creator.id;
+      } else {
+        const creator = await participantRepository.findById(actor.participantId);
+
+        if (
+          !creator ||
+          !creator.isAnonymous ||
+          creator.eventId !== eventId ||
+          actor.eventId !== eventId
+        ) {
+          throw new ForbiddenError("El participante no pertenece al evento");
+        }
+
+        createdByParticipantId = creator.id;
       }
 
       const participants = await participantRepository.findByEventId(eventId);
@@ -61,22 +99,6 @@ export function createExpenseService(
         if (!participantIds.has(participantId)) {
           throw new ValidationError("Todos los participantes deben pertenecer al evento");
         }
-      }
-
-      let createdByParticipantId: string;
-      if (actor.type === "user") {
-        const creator = await participantRepository.findAttendanceByEventIdAndUserId(
-          eventId,
-          actor.userId,
-        );
-
-        if (!creator) {
-          throw new ValidationError("El creador no pertenece al evento");
-        }
-
-        createdByParticipantId = creator.id;
-      } else {
-        createdByParticipantId = actor.participantId;
       }
 
       if (!participantIds.has(createdByParticipantId)) {

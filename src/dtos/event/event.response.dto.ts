@@ -1,6 +1,7 @@
 import type { Event, EventStatus } from "../../repositories/event.repository.js";
 
 export interface EventParticipantResponseDTO {
+  id: string;
   eventId: string;
   userId: string | null;
   username: string;
@@ -33,6 +34,7 @@ export function toEventResponseDTO(event: Event): EventResponseDTO {
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,
     participants: event.participants.map((participant) => ({
+      id: participant.id,
       eventId: participant.eventId,
       userId: participant.userId,
       username: participant.username,

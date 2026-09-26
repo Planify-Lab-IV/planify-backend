@@ -229,7 +229,13 @@ describe("GET /events/:eventId", () => {
       status: "active",
     });
     expect(response.body.participants).toHaveLength(3);
-    expect(response.body.participants[0]).not.toHaveProperty("id");
+    expect(response.body.participants).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "participant-organizer" }),
+        expect.objectContaining({ id: "participant-member" }),
+        expect.objectContaining({ id: anonymousParticipantId }),
+      ]),
+    );
     expect(response.body.participants[2]).not.toHaveProperty("pinHash");
     expect(JSON.stringify(response.body)).not.toContain("hash-secreto");
   });

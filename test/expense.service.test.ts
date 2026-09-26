@@ -4,13 +4,19 @@ import type {
   Expense,
   ExpenseRepository,
 } from "../src/repositories/expense.repository.js";
+import type { Event, EventRepository } from "../src/repositories/event.repository.js";
 import type {
   AttendanceParticipant,
   Participant,
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
 import { createExpenseService } from "../src/services/expense.service.js";
-import { ValidationError } from "../src/shared/errors/index.js";
+import {
+  EventUnavailableError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "../src/shared/errors/index.js";
 import type { CreateExpenseDTO } from "../src/validators/expense/create.expense.validator.js";
 
 const eventId = "event-1";
@@ -50,12 +56,30 @@ function makeExpense(params: CreateExpenseParams): Expense {
   };
 }
 
+function makeEvent(overrides: Partial<Event> = {}): Event {
+  return {
+    id: eventId,
+    groupId: "group-1",
+    organizerId: "user-1",
+    name: "Cena",
+    location: "Casa de Ana",
+    status: "active",
+    startDateTime: null,
+    createdAt: new Date("2026-09-19T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-19T00:00:00.000Z"),
+    participants: [],
+    ...overrides,
+  };
+}
+
 function createParticipantRepository(
   participants: Participant[],
   creator: AttendanceParticipant | null = makeAttendanceParticipant(),
 ): ParticipantRepository {
   return {
-    findById: vi.fn(),
+    findById: vi.fn(
+      async (id) => participants.find((participant) => participant.id === id) ?? null,
+    ),
     findByEventId: vi.fn(async () => participants),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(),
@@ -68,6 +92,15 @@ function createParticipantRepository(
 function createExpenseRepository(): ExpenseRepository {
   return {
     createAtomic: vi.fn(async (params) => makeExpense(params)),
+  };
+}
+
+function createEventRepository(event: Event | null = makeEvent()): EventRepository {
+  return {
+    findById: vi.fn(async () => event),
+    createAtomic: vi.fn(),
+    cancelAtomic: vi.fn(),
+    confirmSchedule: vi.fn(),
   };
 }
 
@@ -95,12 +128,14 @@ function makeService(
     makeParticipant({ id: "participant-cami", username: "cami" }),
   ],
   creator: AttendanceParticipant | null = makeAttendanceParticipant(),
+  event: Event | null = makeEvent(),
 ) {
   const expenseRepository = createExpenseRepository();
+  const eventRepository = createEventRepository(event);
   const participantRepository = createParticipantRepository(participants, creator);
-  const service = createExpenseService(expenseRepository, participantRepository);
+  const service = createExpenseService(expenseRepository, eventRepository, participantRepository);
 
-  return { service, expenseRepository, participantRepository };
+  return { service, expenseRepository, eventRepository, participantRepository };
 }
 
 describe("ExpenseService.createExpense", () => {
@@ -165,6 +200,50 @@ describe("ExpenseService.createExpense", () => {
     );
   });
 
+  it("permite gastos en un evento confirmado", async () => {
+    const { service, expenseRepository } = makeService(
+      undefined,
+      undefined,
+      makeEvent({ status: "confirmed" }),
+    );
+
+    await expect(
+      service.createExpense(eventId, { type: "user", userId: "user-1" }, makeDto()),
+    ).resolves.toMatchObject({ id: "expense-1" });
+
+    expect(expenseRepository.createAtomic).toHaveBeenCalledOnce();
+  });
+
+  it("devuelve not found si el evento no existe", async () => {
+    const { service, expenseRepository, participantRepository } = makeService(
+      undefined,
+      undefined,
+      null,
+    );
+
+    await expect(
+      service.createExpense(eventId, { type: "user", userId: "user-1" }, makeDto()),
+    ).rejects.toBeInstanceOf(NotFoundError);
+
+    expect(participantRepository.findByEventId).not.toHaveBeenCalled();
+    expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
+  });
+
+  it("rechaza gastos para un evento cancelado", async () => {
+    const { service, expenseRepository, participantRepository } = makeService(
+      undefined,
+      undefined,
+      makeEvent({ status: "cancelled" }),
+    );
+
+    await expect(
+      service.createExpense(eventId, { type: "user", userId: "user-1" }, makeDto()),
+    ).rejects.toBeInstanceOf(EventUnavailableError);
+
+    expect(participantRepository.findByEventId).not.toHaveBeenCalled();
+    expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["la suma de acreedores no coincide", makeDto({ totalAmountCents: 4000 })],
     [
@@ -220,31 +299,59 @@ describe("ExpenseService.createExpense", () => {
     expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
   });
 
-  it("rechaza a un usuario que no es participante del evento", async () => {
+  it("prohibe a un usuario que no es participante del evento", async () => {
     const { service, expenseRepository } = makeService(undefined, null);
 
     await expect(
       service.createExpense(eventId, { type: "user", userId: "user-outside" }, makeDto()),
-    ).rejects.toBeInstanceOf(ValidationError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
     expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
   });
 
   it("rechaza a un participante anónimo cuyo token corresponde a otro evento", async () => {
-    const { service, expenseRepository, participantRepository } = makeService();
+    const anonymousParticipant = makeParticipant({
+      id: "participant-anonymous",
+      eventId: "event-2",
+      isAnonymous: true,
+    });
+    const { service, expenseRepository, participantRepository } = makeService([
+      anonymousParticipant,
+    ]);
 
     await expect(
       service.createExpense(
         eventId,
         {
           type: "anonymousParticipant",
-          participantId: "participant-creator",
+          participantId: anonymousParticipant.id,
           eventId: "event-2",
         },
         makeDto(),
       ),
-    ).rejects.toBeInstanceOf(ValidationError);
+    ).rejects.toBeInstanceOf(ForbiddenError);
 
     expect(participantRepository.findByEventId).not.toHaveBeenCalled();
     expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["no existe", "participant-missing", []],
+    ["no es anonimo", "participant-creator", [makeParticipant()]],
+  ])(
+    "prohibe un actor anonimo cuyo participante %s",
+    async (_description, participantId, participants) => {
+      const { service, expenseRepository, participantRepository } = makeService(participants);
+
+      await expect(
+        service.createExpense(
+          eventId,
+          { type: "anonymousParticipant", participantId, eventId },
+          makeDto(),
+        ),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+
+      expect(participantRepository.findByEventId).not.toHaveBeenCalled();
+      expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
+    },
+  );
 });

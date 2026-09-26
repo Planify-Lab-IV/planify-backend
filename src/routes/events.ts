@@ -80,7 +80,11 @@ router.get("/events/:eventId/availability/heatmap", requireAuth, (req, res, next
   availabilityController.heatmap(req, res, next),
 );
 
-const expenseService = createExpenseService(expenseRepository, participantRepository);
+const expenseService = createExpenseService(
+  expenseRepository,
+  eventRepository,
+  participantRepository,
+);
 const expenseController = createExpenseController(expenseService);
 
 router.post("/events/:eventId/expenses", requireAttendanceAuth, (req, res, next) =>
