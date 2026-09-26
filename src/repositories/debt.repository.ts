@@ -1,4 +1,5 @@
 import { prisma } from "../infrastructure/prisma.js";
+import type { SimplifiedDebt } from "../services/debt-simplification.service.js";
 
 export type DebtStatus = "pending" | "settled";
 
@@ -13,16 +14,10 @@ export interface SimplifiedDebtRecord {
   createdAt: Date;
 }
 
-export interface SimplifiedDebtInput {
-  debtorParticipantId: string;
-  creditorParticipantId: string;
-  amountCents: number;
-}
-
 export interface DebtRepository {
   findByEventId(eventId: string): Promise<SimplifiedDebtRecord[]>;
   findSettledByEventId(eventId: string): Promise<SimplifiedDebtRecord[]>;
-  replacePendingForEvent(eventId: string, debts: SimplifiedDebtInput[]): Promise<void>;
+  replacePendingForEvent(eventId: string, debts: SimplifiedDebt[]): Promise<void>;
 }
 
 export const debtRepository: DebtRepository = {
@@ -40,7 +35,7 @@ export const debtRepository: DebtRepository = {
     });
   },
 
-  async replacePendingForEvent(eventId: string, debts: SimplifiedDebtInput[]): Promise<void> {
+  async replacePendingForEvent(eventId: string, debts: SimplifiedDebt[]): Promise<void> {
     await prisma.$transaction(async (tx) => {
       await tx.simplifiedDebt.deleteMany({
         where: { eventId, status: "pending" },
