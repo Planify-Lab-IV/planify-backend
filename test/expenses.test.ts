@@ -17,6 +17,12 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     },
     expense: {
       create: vi.fn(),
+      findMany: vi.fn(),
+    },
+    simplifiedDebt: {
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
@@ -75,9 +81,19 @@ describe("POST /events/:eventId/expenses", () => {
       attendanceState: "not_confirmed",
     } as never);
     vi.mocked(prisma.expense.create).mockResolvedValueOnce(createdExpense as never);
-    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
-      callback: (tx: unknown) => unknown,
-    ) => callback({ expense: { create: prisma.expense.create } })) as never);
+    vi.mocked(prisma.expense.findMany).mockResolvedValueOnce([createdExpense] as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([] as never);
+    vi.mocked(prisma.simplifiedDebt.deleteMany).mockResolvedValueOnce({ count: 0 } as never);
+    vi.mocked(prisma.simplifiedDebt.createMany).mockResolvedValueOnce({ count: 2 } as never);
+
+    vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
+      callback({
+        expense: { create: prisma.expense.create },
+        simplifiedDebt: {
+          deleteMany: prisma.simplifiedDebt.deleteMany,
+          createMany: prisma.simplifiedDebt.createMany,
+        },
+      })) as never);
 
     const response = await request(app)
       .post(`/events/${eventId}/expenses`)
