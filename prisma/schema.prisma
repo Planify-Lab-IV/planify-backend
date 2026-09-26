@@ -56,11 +56,12 @@ model Event {
   updatedAt     DateTime  @updatedAt @map("updated_at")
   startDateTime DateTime? @map("start_date_time")
 
-  group        Group              @relation(fields: [groupId], references: [id])
-  organizer    User               @relation("EventOrganizer", fields: [organizerId], references: [id])
-  participants EventParticipant[]
-  invitations  Invitation[]
-  Expense      Expense[]
+  group           Group              @relation(fields: [groupId], references: [id])
+  organizer       User               @relation("EventOrganizer", fields: [organizerId], references: [id])
+  participants    EventParticipant[]
+  invitations     Invitation[]
+  expense         Expense[]
+  simplifiedDebts SimplifiedDebt[]
 
   @@map("evento")
 }
@@ -94,6 +95,8 @@ model EventParticipant {
   Expense           Expense[]
   ExpensePayer      ExpensePayer[]
   ExpenseDebtor     ExpenseDebtor[]
+  debtsAsDebtor     SimplifiedDebt[]   @relation("DebtDebtor")
+  debtsAsCreditor   SimplifiedDebt[]   @relation("DebtCreditor")
 
   @@unique([id, eventId])
   @@unique([eventId, username])
@@ -166,4 +169,29 @@ model ExpenseDebtor {
   @@id([expenseId, participantId])
   @@index([participantId, eventId])
   @@map("deudor_gasto")
+}
+
+enum DebtStatus {
+  pending
+  settled
+}
+
+model SimplifiedDebt {
+  id                    String     @id @default(uuid())
+  eventId               String     @map("evento_id")
+  debtorParticipantId   String     @map("deudor_participante_id")
+  creditorParticipantId String     @map("acreedor_participante_id")
+  amountCents           Int        @map("monto_centavos")
+  status                DebtStatus @default(pending) @map("estado")
+  settledAt             DateTime?  @map("saldado_en")
+  createdAt             DateTime   @default(now()) @map("created_at")
+
+  event    Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  debtor   EventParticipant @relation("DebtDebtor", fields: [debtorParticipantId, eventId], references: [id, eventId])
+  creditor EventParticipant @relation("DebtCreditor", fields: [creditorParticipantId, eventId], references: [id, eventId])
+
+  @@index([eventId])
+  @@index([debtorParticipantId])
+  @@index([creditorParticipantId])
+  @@map("deuda_simplificada")
 }
