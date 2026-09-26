@@ -32,12 +32,12 @@ function makeSettledDebt(
   return {
     id,
     eventId,
-    debtorParticipantId,
-    creditorParticipantId,
     amountCents,
     status: "settled",
     settledAt: new Date("2026-09-21T00:00:00.000Z"),
     createdAt: new Date("2026-09-20T00:00:00.000Z"),
+    debtor: { id: debtorParticipantId, username: debtorParticipantId },
+    creditor: { id: creditorParticipantId, username: creditorParticipantId },
   };
 }
 
@@ -65,12 +65,12 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
         ...debts.map((d, index) => ({
           id: `debt-pending-${index}`,
           eventId,
-          debtorParticipantId: d.debtorParticipantId,
-          creditorParticipantId: d.creditorParticipantId,
           amountCents: d.amountCents,
           status: "pending" as const,
           settledAt: null,
           createdAt: new Date("2026-09-22T00:00:00.000Z"),
+          debtor: { id: d.debtorParticipantId, username: d.debtorParticipantId },
+          creditor: { id: d.creditorParticipantId, username: d.creditorParticipantId },
         })),
       );
     }),

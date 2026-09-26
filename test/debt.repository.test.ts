@@ -18,17 +18,27 @@ describe("DebtRepository.findByEventId", () => {
     vi.clearAllMocks();
   });
 
-  it("obtiene todas las deudas del evento ordenadas por fecha de creación", async () => {
+  it("obtiene deudas con deudor y acreedor, ordenadas por estado, monto e id", async () => {
     const records = [
       {
-        id: "debt-1",
+        id: "debt-pending-2",
         eventId: "event-1",
-        debtorParticipantId: "participant-ana",
-        creditorParticipantId: "participant-beto",
         amountCents: 1500,
         status: "pending" as const,
         settledAt: null,
         createdAt: new Date("2026-09-20T00:00:00.000Z"),
+        debtor: { id: "participant-ana", username: "ana" },
+        creditor: { id: "participant-beto", username: "beto" },
+      },
+      {
+        id: "debt-settled-1",
+        eventId: "event-1",
+        amountCents: 500,
+        status: "settled" as const,
+        settledAt: new Date("2026-09-21T00:00:00.000Z"),
+        createdAt: new Date("2026-09-20T00:00:00.000Z"),
+        debtor: { id: "participant-cami", username: "cami" },
+        creditor: { id: "participant-beto", username: "beto" },
       },
     ];
 
@@ -38,7 +48,17 @@ describe("DebtRepository.findByEventId", () => {
 
     expect(prisma.simplifiedDebt.findMany).toHaveBeenCalledWith({
       where: { eventId: "event-1" },
-      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        eventId: true,
+        amountCents: true,
+        status: true,
+        settledAt: true,
+        createdAt: true,
+        debtor: { select: { id: true, username: true } },
+        creditor: { select: { id: true, username: true } },
+      },
+      orderBy: [{ status: "asc" }, { amountCents: "desc" }, { id: "asc" }],
     });
   });
 });
@@ -53,12 +73,12 @@ describe("DebtRepository.findSettledByEventId", () => {
       {
         id: "debt-1",
         eventId: "event-1",
-        debtorParticipantId: "participant-ana",
-        creditorParticipantId: "participant-beto",
         amountCents: 1500,
         status: "settled" as const,
         settledAt: new Date("2026-09-21T00:00:00.000Z"),
         createdAt: new Date("2026-09-20T00:00:00.000Z"),
+        debtor: { id: "participant-ana", username: "ana" },
+        creditor: { id: "participant-beto", username: "beto" },
       },
     ];
 
@@ -68,6 +88,16 @@ describe("DebtRepository.findSettledByEventId", () => {
 
     expect(prisma.simplifiedDebt.findMany).toHaveBeenCalledWith({
       where: { eventId: "event-1", status: "settled" },
+      select: {
+        id: true,
+        eventId: true,
+        amountCents: true,
+        status: true,
+        settledAt: true,
+        createdAt: true,
+        debtor: { select: { id: true, username: true } },
+        creditor: { select: { id: true, username: true } },
+      },
       orderBy: { createdAt: "asc" },
     });
   });

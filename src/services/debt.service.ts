@@ -31,8 +31,8 @@ export function buildParticipantAmounts(
   }
 
   for (const debt of settledDebts) {
-    getOrCreate(debt.debtorParticipantId).contributedCents += debt.amountCents;
-    getOrCreate(debt.creditorParticipantId).owedCents += debt.amountCents;
+    getOrCreate(debt.debtor.id).contributedCents += debt.amountCents;
+    getOrCreate(debt.creditor.id).owedCents += debt.amountCents;
   }
 
   return [...totals.entries()].map(([participantId, { contributedCents, owedCents }]) => ({
