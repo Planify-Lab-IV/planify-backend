@@ -10,6 +10,7 @@ import type {
   Participant,
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
+import type { DebtService } from "../src/services/debt.service.js";
 import { createExpenseService } from "../src/services/expense.service.js";
 import {
   EventUnavailableError,
@@ -92,6 +93,13 @@ function createParticipantRepository(
 function createExpenseRepository(): ExpenseRepository {
   return {
     createAtomic: vi.fn(async (params) => makeExpense(params)),
+    findByEventId: vi.fn(),
+  };
+}
+
+function createDebtServiceMock(): DebtService {
+  return {
+    recalculateForEvent: vi.fn(async () => {}),
   };
 }
 
@@ -129,18 +137,24 @@ function makeService(
   ],
   creator: AttendanceParticipant | null = makeAttendanceParticipant(),
   event: Event | null = makeEvent(),
+  debtService: DebtService = createDebtServiceMock(),
 ) {
   const expenseRepository = createExpenseRepository();
   const eventRepository = createEventRepository(event);
   const participantRepository = createParticipantRepository(participants, creator);
-  const service = createExpenseService(expenseRepository, eventRepository, participantRepository);
+  const service = createExpenseService(
+    expenseRepository,
+    eventRepository,
+    participantRepository,
+    debtService,
+  );
 
-  return { service, expenseRepository, eventRepository, participantRepository };
+  return { service, expenseRepository, eventRepository, participantRepository, debtService };
 }
 
 describe("ExpenseService.createExpense", () => {
-  it("crea un gasto con múltiples acreedores y deudores", async () => {
-    const { service, expenseRepository } = makeService();
+  it("crea un gasto con múltiples acreedores y deudores y dispara el recálculo", async () => {
+    const { service, expenseRepository, debtService } = makeService();
     const dto = makeDto();
 
     await expect(
@@ -160,6 +174,7 @@ describe("ExpenseService.createExpense", () => {
       payers: dto.payers,
       debtors: dto.debtors,
     });
+    expect(debtService.recalculateForEvent).toHaveBeenCalledWith(eventId);
   });
 
   it("acepta al participante anónimo del mismo evento como creador", async () => {

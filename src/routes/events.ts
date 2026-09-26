@@ -21,6 +21,8 @@ import { availabilityRepository } from "../repositories/availability.repository.
 import { createAvailabilityService } from "../services/availability.service.js";
 import { createAvailabilityController } from "../controllers/availability.controller.js";
 import { expenseRepository } from "../repositories/expense.repository.js";
+import { debtRepository } from "../repositories/debt.repository.js";
+import { createDebtService } from "../services/debt.service.js";
 import { createExpenseService } from "../services/expense.service.js";
 import { createExpenseController } from "../controllers/expense.controller.js";
 
@@ -80,10 +82,12 @@ router.get("/events/:eventId/availability/heatmap", requireAuth, (req, res, next
   availabilityController.heatmap(req, res, next),
 );
 
+const debtService = createDebtService(expenseRepository, debtRepository);
 const expenseService = createExpenseService(
   expenseRepository,
   eventRepository,
   participantRepository,
+  debtService,
 );
 const expenseController = createExpenseController(expenseService);
 

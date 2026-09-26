@@ -7,6 +7,7 @@ import type {
 import type { EventRepository } from "../repositories/event.repository.js";
 import type { ParticipantRepository } from "../repositories/participant.repository.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
+import type { DebtService } from "./debt.service.js";
 import {
   EventUnavailableError,
   ForbiddenError,
@@ -31,6 +32,7 @@ export function createExpenseService(
   expenseRepository: ExpenseRepository,
   eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
+  debtService: DebtService,
 ): ExpenseService {
   return {
     async createExpense(eventId, actor, dto) {
@@ -114,7 +116,9 @@ export function createExpenseService(
         debtors: dto.debtors,
       };
 
-      return expenseRepository.createAtomic(params);
+      const createdExpense = await expenseRepository.createAtomic(params);
+      await debtService.recalculateForEvent(eventId);
+      return createdExpense;
     },
   };
 }
