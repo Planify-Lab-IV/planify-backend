@@ -52,7 +52,7 @@ router.get("/events/:eventId", requireAttendanceAuth, (req, res, next) =>
   eventController.getById(req, res, next),
 );
 
-router.put("/events/:id/cancel", requireAuth, (req, res, next) =>
+router.put("/events/:eventId/cancel", requireAuth, (req, res, next) =>
   eventController.cancel(req, res, next),
 );
 
