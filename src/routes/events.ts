@@ -82,7 +82,7 @@ router.get("/events/:eventId/availability/heatmap", requireAuth, (req, res, next
   availabilityController.heatmap(req, res, next),
 );
 
-const debtService = createDebtService(expenseRepository, debtRepository);
+const debtService = createDebtService(expenseRepository, debtRepository, eventRepository);
 const expenseService = createExpenseService(
   expenseRepository,
   eventRepository,
