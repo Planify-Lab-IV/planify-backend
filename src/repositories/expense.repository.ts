@@ -33,6 +33,7 @@ export interface CreateExpenseParams {
 
 export interface ExpenseRepository {
   createAtomic(params: CreateExpenseParams): Promise<Expense>;
+  findByEventId(eventId: string): Promise<Expense[]>;
 }
 
 export const expenseRepository: ExpenseRepository = {
@@ -62,6 +63,17 @@ export const expenseRepository: ExpenseRepository = {
           debtors: true,
         },
       });
+    });
+  },
+
+  async findByEventId(eventId: string): Promise<Expense[]> {
+    return prisma.expense.findMany({
+      where: { eventId },
+      include: {
+        payers: true,
+        debtors: true,
+      },
+      orderBy: { createdAt: "asc" },
     });
   },
 };
