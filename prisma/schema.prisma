@@ -61,6 +61,7 @@ model Event {
   participants EventParticipant[]
   invitations  Invitation[]
   Expense      Expense[]
+  Task         Task[]
 
   @@map("evento")
 }
@@ -94,6 +95,8 @@ model EventParticipant {
   Expense           Expense[]
   ExpensePayer      ExpensePayer[]
   ExpenseDebtor     ExpenseDebtor[]
+  assignedTasks     Task[]             @relation("TaskAssignee")
+  createdTasks      Task[]             @relation("TaskCreator")
 
   @@unique([id, eventId])
   @@unique([eventId, username])
@@ -166,4 +169,28 @@ model ExpenseDebtor {
   @@id([expenseId, participantId])
   @@index([participantId, eventId])
   @@map("deudor_gasto")
+}
+
+enum TaskStatus {
+  unassigned
+  pending
+  completed
+}
+
+model Task {
+  id                      String     @id @default(uuid())
+  eventId                 String     @map("evento_id")
+  title                   String     @map("titulo")
+  status                  TaskStatus @default(unassigned) @map("estado")
+  assignedToParticipantId String?    @map("asignado_a_participante_id")
+  createdByParticipantId  String     @map("creado_por_participante_id")
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
+
+  event      Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignedTo EventParticipant? @relation("TaskAssignee", fields: [assignedToParticipantId, eventId], references: [id, eventId])
+  createdBy  EventParticipant  @relation("TaskCreator", fields: [createdByParticipantId, eventId], references: [id, eventId])
+
+  @@index([eventId])
+  @@map("tarea")
 }
