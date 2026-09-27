@@ -2,6 +2,11 @@ import type { Expense, ExpenseRepository } from "../repositories/expense.reposit
 import type { DebtRepository, SimplifiedDebtRecord } from "../repositories/debt.repository.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
 
+export interface UserBalanceSummary {
+  owedToMeCents: number;
+  iOweCents: number;
+}
+
 export interface DebtService {
   recalculateForEvent(eventId: string): Promise<void>;
 }
