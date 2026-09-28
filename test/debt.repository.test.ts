@@ -73,6 +73,89 @@ describe("DebtRepository.findSettledByEventId", () => {
   });
 });
 
+describe("DebtRepository.findByUserId", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("obtiene las deudas de un usuario para los estados solicitados", async () => {
+    const records = [
+      {
+        amountCents: 1500,
+        status: "pending" as const,
+        eventId: "event-1",
+        debtor: {
+          id: "participant-ana",
+          userId: "user-ana",
+          username: "ana",
+          user: { name: "Ana Pérez" },
+        },
+        creditor: {
+          id: "participant-invitado",
+          userId: null,
+          username: "invitado",
+          user: null,
+        },
+        event: { name: "Cena" },
+      },
+    ];
+
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce(records as never);
+
+    await expect(
+      debtRepository.findByUserId("user-ana", { statuses: ["pending"] }),
+    ).resolves.toEqual([
+      {
+        debtor: {
+          participantId: "participant-ana",
+          userId: "user-ana",
+          participantUsername: "ana",
+          userName: "Ana Pérez",
+        },
+        creditor: {
+          participantId: "participant-invitado",
+          userId: null,
+          participantUsername: "invitado",
+          userName: null,
+        },
+        amountCents: 1500,
+        status: "pending",
+        eventId: "event-1",
+        eventName: "Cena",
+      },
+    ]);
+
+    expect(prisma.simplifiedDebt.findMany).toHaveBeenCalledWith({
+      where: {
+        status: { in: ["pending"] },
+        OR: [{ debtor: { userId: "user-ana" } }, { creditor: { userId: "user-ana" } }],
+      },
+      select: {
+        amountCents: true,
+        status: true,
+        eventId: true,
+        debtor: {
+          select: {
+            id: true,
+            userId: true,
+            username: true,
+            user: { select: { name: true } },
+          },
+        },
+        creditor: {
+          select: {
+            id: true,
+            userId: true,
+            username: true,
+            user: { select: { name: true } },
+          },
+        },
+        event: { select: { name: true } },
+      },
+    });
+  });
+});
+
 describe("DebtRepository.replacePendingForEvent", () => {
   const eventId = "event-1";
   const debts = [

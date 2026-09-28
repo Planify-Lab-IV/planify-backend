@@ -59,6 +59,7 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
     findSettledByEventId: vi.fn(async (eventId) =>
       records.filter((d) => d.eventId === eventId && d.status === "settled"),
     ),
+    findByUserId: vi.fn(async () => []),
     replacePendingForEvent: vi.fn(async (eventId, debts) => {
       records = records.filter((d) => !(d.eventId === eventId && d.status === "pending"));
       records.push(
