@@ -13,13 +13,21 @@ import type {
   PersonKey,
   UserBalanceSummary,
 } from "../types/balance.js";
+import type { EventRepository } from "../repositories/event.repository.js";
+import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
-import { NotFoundError, ValidationError } from "../shared/errors/index.js";
+import { NotFoundError, ValidationError, ForbiddenError } from "../shared/errors/index.js";
 
 export type { UserBalanceSummary } from "../types/balance.js";
 
+export interface EventDebts {
+  debts: SimplifiedDebtRecord[];
+  allSettled: boolean;
+}
+
 export interface DebtService {
   recalculateForEvent(eventId: string): Promise<void>;
+  listEventDebts(eventId: string, actor: AttendanceActor): Promise<EventDebts>;
   getBalanceSummary(userId: string): Promise<UserBalanceSummary>;
   getPeopleBalances(userId: string): Promise<PersonBalance[]>;
   getPersonDetail(userId: string, personKey: string): Promise<PersonBalanceDetail>;
@@ -28,6 +36,7 @@ export interface DebtService {
 export function createDebtService(
   expenseRepository: ExpenseRepository,
   debtRepository: DebtRepository,
+  eventRepository: EventRepository,
 ): DebtService {
   return {
     async recalculateForEvent(eventId: string): Promise<void> {
@@ -40,6 +49,33 @@ export function createDebtService(
       const simplifiedDebts = simplifyDebts(participantAmounts);
 
       await debtRepository.replacePendingForEvent(eventId, simplifiedDebts);
+    },
+
+    async listEventDebts(eventId, actor) {
+      const event = await eventRepository.findById(eventId);
+
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      const isAuthorized =
+        actor.type === "user"
+          ? event.participants.some((participant) => participant.userId === actor.userId)
+          : actor.eventId === eventId &&
+            event.participants.some(
+              (participant) => participant.id === actor.participantId && participant.isAnonymous,
+            );
+
+      if (!isAuthorized) {
+        throw new ForbiddenError("No pertenecés a este evento");
+      }
+
+      const debts = await debtRepository.findByEventId(eventId);
+
+      return {
+        debts,
+        allSettled: debts.length > 0 && debts.every((debt) => debt.status === "settled"),
+      };
     },
 
     async getBalanceSummary(userId: string): Promise<UserBalanceSummary> {
@@ -190,8 +226,8 @@ export function buildParticipantAmounts(
   }
 
   for (const debt of settledDebts) {
-    getOrCreate(debt.debtorParticipantId).contributedCents += debt.amountCents;
-    getOrCreate(debt.creditorParticipantId).owedCents += debt.amountCents;
+    getOrCreate(debt.debtor.id).contributedCents += debt.amountCents;
+    getOrCreate(debt.creditor.id).owedCents += debt.amountCents;
   }
 
   return [...totals.entries()].map(([participantId, { contributedCents, owedCents }]) => ({
