@@ -42,6 +42,7 @@ const eventService = createEventService(
   groupRepository,
   userRepository,
   participantRepository,
+  debtRepository,
 );
 const eventController = createEventController(eventService);
 
