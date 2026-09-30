@@ -15,6 +15,14 @@ const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService);
 const debtService = createDebtService(expenseRepository, debtRepository);
 const balanceController = createBalanceController(debtService);
 
+router.get("/me/balance/people", requireAuthenticatedUser, (req, res, next) =>
+  balanceController.getPeople(req, res, next),
+);
+
+router.get("/me/balance/people/:personKey", requireAuthenticatedUser, (req, res, next) =>
+  balanceController.getPersonDetail(req, res, next),
+);
+
 router.get("/me/balance", requireAuthenticatedUser, (req, res, next) =>
   balanceController.getSummary(req, res, next),
 );
