@@ -1,8 +1,13 @@
 import type { Expense, ExpenseRepository } from "../repositories/expense.repository.js";
 import type { DebtRepository, SimplifiedDebtRecord } from "../repositories/debt.repository.js";
-import type { EventRepository } from "../repositories/event.repository.js";
+import type { Event, EventRepository } from "../repositories/event.repository.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
-import { ForbiddenError, NotFoundError } from "../shared/errors/index.js";
+import {
+  DebtAlreadySettledError,
+  EventUnavailableError,
+  ForbiddenError,
+  NotFoundError,
+} from "../shared/errors/index.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
 
 export interface EventDebts {
@@ -10,9 +15,112 @@ export interface EventDebts {
   allSettled: boolean;
 }
 
+export interface DebtSettlement {
+  debt: SimplifiedDebtRecord;
+  allEventDebtsSettled: boolean;
+}
+
 export interface DebtService {
   recalculateForEvent(eventId: string): Promise<void>;
   listEventDebts(eventId: string, actor: AttendanceActor): Promise<EventDebts>;
+  settleDebt(eventId: string, debtId: string, actor: AttendanceActor): Promise<DebtSettlement>;
+}
+
+export function createDebtService(
+  expenseRepository: ExpenseRepository,
+  debtRepository: DebtRepository,
+  eventRepository: EventRepository,
+): DebtService {
+  function resolveActorParticipantId(
+    event: Event,
+    eventId: string,
+    actor: AttendanceActor,
+  ): string {
+    const participant =
+      actor.type === "user"
+        ? event.participants.find((candidate) => candidate.userId === actor.userId)
+        : actor.eventId === eventId
+          ? event.participants.find(
+              (candidate) => candidate.id === actor.participantId && candidate.isAnonymous,
+            )
+          : undefined;
+
+    if (!participant) {
+      throw new ForbiddenError("No pertenecés a este evento");
+    }
+
+    return participant.id;
+  }
+
+  return {
+    async recalculateForEvent(eventId: string): Promise<void> {
+      const [expenses, settledDebts] = await Promise.all([
+        expenseRepository.findByEventId(eventId),
+        debtRepository.findSettledByEventId(eventId),
+      ]);
+
+      const participantAmounts = buildParticipantAmounts(expenses, settledDebts);
+      const simplifiedDebts = simplifyDebts(participantAmounts);
+
+      await debtRepository.replacePendingForEvent(eventId, simplifiedDebts);
+    },
+
+    async listEventDebts(eventId, actor) {
+      const event = await eventRepository.findById(eventId);
+
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      resolveActorParticipantId(event, eventId, actor);
+
+      const debts = await debtRepository.findByEventId(eventId);
+
+      return {
+        debts,
+        allSettled: debts.length > 0 && debts.every((debt) => debt.status === "settled"),
+      };
+    },
+
+    async settleDebt(eventId, debtId, actor) {
+      const event = await eventRepository.findById(eventId);
+
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+      if (event.status === "cancelled") {
+        throw new EventUnavailableError();
+      }
+
+      const actorParticipantId = resolveActorParticipantId(event, eventId, actor);
+      const debt = await debtRepository.findById(debtId);
+
+      if (!debt || debt.eventId !== eventId) {
+        throw new NotFoundError("Deuda no encontrada");
+      }
+      if (debt.debtor.id !== actorParticipantId && debt.creditor.id !== actorParticipantId) {
+        throw new ForbiddenError("Solo el deudor o acreedor pueden saldar la deuda");
+      }
+      if (debt.status === "settled") {
+        throw new DebtAlreadySettledError();
+      }
+
+      const settledAt = new Date();
+      const affectedRows = await debtRepository.markSettled(debtId, settledAt);
+
+      if (affectedRows === 0) {
+        throw new DebtAlreadySettledError();
+      }
+
+      const debts = await debtRepository.findByEventId(eventId);
+
+      return {
+        debt: { ...debt, status: "settled", settledAt },
+        allEventDebtsSettled:
+          debts.length > 0 && debts.every((currentDebt) => currentDebt.status === "settled"),
+      };
+    },
+  };
 }
 
 export function buildParticipantAmounts(
@@ -49,51 +157,4 @@ export function buildParticipantAmounts(
     contributedCents,
     owedCents,
   }));
-}
-
-export function createDebtService(
-  expenseRepository: ExpenseRepository,
-  debtRepository: DebtRepository,
-  eventRepository: EventRepository,
-): DebtService {
-  return {
-    async listEventDebts(eventId, actor) {
-      const event = await eventRepository.findById(eventId);
-
-      if (!event) {
-        throw new NotFoundError("Evento no encontrado");
-      }
-
-      const isAuthorized =
-        actor.type === "user"
-          ? event.participants.some((participant) => participant.userId === actor.userId)
-          : actor.eventId === eventId &&
-            event.participants.some(
-              (participant) => participant.id === actor.participantId && participant.isAnonymous,
-            );
-
-      if (!isAuthorized) {
-        throw new ForbiddenError("No pertenecés a este evento");
-      }
-
-      const debts = await debtRepository.findByEventId(eventId);
-
-      return {
-        debts,
-        allSettled: debts.length > 0 && debts.every((debt) => debt.status === "settled"),
-      };
-    },
-
-    async recalculateForEvent(eventId: string): Promise<void> {
-      const [expenses, settledDebts] = await Promise.all([
-        expenseRepository.findByEventId(eventId),
-        debtRepository.findSettledByEventId(eventId),
-      ]);
-
-      const participantAmounts = buildParticipantAmounts(expenses, settledDebts);
-      const simplifiedDebts = simplifyDebts(participantAmounts);
-
-      await debtRepository.replacePendingForEvent(eventId, simplifiedDebts);
-    },
-  };
 }
