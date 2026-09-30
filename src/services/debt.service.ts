@@ -9,6 +9,7 @@ export interface UserBalanceSummary {
 
 export interface DebtService {
   recalculateForEvent(eventId: string): Promise<void>;
+  getBalanceSummary(userId: string): Promise<UserBalanceSummary>;
 }
 
 export function buildParticipantAmounts(
@@ -62,6 +63,26 @@ export function createDebtService(
       const simplifiedDebts = simplifyDebts(participantAmounts);
 
       await debtRepository.replacePendingForEvent(eventId, simplifiedDebts);
+    },
+
+    async getBalanceSummary(userId: string): Promise<UserBalanceSummary> {
+      const debts = await debtRepository.findByUserId(userId, { statuses: ["pending"] });
+      let owedToMeCents = 0;
+      let iOweCents = 0;
+
+      for (const debt of debts) {
+        if (debt.status !== "pending") continue;
+
+        if (debt.creditor.userId === userId) {
+          owedToMeCents += debt.amountCents;
+        }
+
+        if (debt.debtor.userId === userId) {
+          iOweCents += debt.amountCents;
+        }
+      }
+
+      return { owedToMeCents, iOweCents };
     },
   };
 }

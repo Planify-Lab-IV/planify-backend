@@ -22,7 +22,7 @@ export interface DebtParticipantForUserRecord {
   participantId: string;
   userId: string | null;
   participantUsername: string;
-  username: string | null;
+  userName: string | null;
 }
 
 export interface DebtForUserRecord {
@@ -94,13 +94,13 @@ export const debtRepository: DebtRepository = {
         participantId: debt.debtor.id,
         userId: debt.debtor.userId,
         participantUsername: debt.debtor.username,
-        username: debt.debtor.user?.name ?? null,
+        userName: debt.debtor.user?.name ?? null,
       },
       creditor: {
         participantId: debt.creditor.id,
         userId: debt.creditor.userId,
         participantUsername: debt.creditor.username,
-        username: debt.creditor.user?.name ?? null,
+        userName: debt.creditor.user?.name ?? null,
       },
       amountCents: debt.amountCents,
       status: debt.status,

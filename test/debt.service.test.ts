@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Expense, ExpenseRepository } from "../src/repositories/expense.repository.js";
-import type { DebtRepository, SimplifiedDebtRecord } from "../src/repositories/debt.repository.js";
+import type {
+  DebtForUserRecord,
+  DebtRepository,
+  SimplifiedDebtRecord,
+} from "../src/repositories/debt.repository.js";
 import { buildParticipantAmounts, createDebtService } from "../src/services/debt.service.js";
 
 function makeExpense(
@@ -75,6 +79,28 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
         })),
       );
     }),
+  };
+}
+
+function makeDebtForUser(overrides: Partial<DebtForUserRecord> = {}): DebtForUserRecord {
+  return {
+    debtor: {
+      participantId: "participant-debtor",
+      userId: "user-debtor",
+      participantUsername: "debtor",
+      userName: "Debtor",
+    },
+    creditor: {
+      participantId: "participant-creditor",
+      userId: "user-creditor",
+      participantUsername: "creditor",
+      userName: "Creditor",
+    },
+    amountCents: 1000,
+    status: "pending",
+    eventId: "event-1",
+    eventName: "Evento",
+    ...overrides,
   };
 }
 
@@ -350,5 +376,86 @@ describe("DebtService.recalculateForEvent", () => {
     );
 
     expect(debtRepository.replacePendingForEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("DebtService.getBalanceSummary", () => {
+  const userId = "user-ana";
+
+  it("acumula créditos y deudas pendientes de distintos eventos sin compensarlos", async () => {
+    const debtRepository = createFakeDebtRepository();
+    vi.mocked(debtRepository.findByUserId).mockResolvedValue([
+      makeDebtForUser({
+        eventId: "event-asado",
+        amountCents: 5000,
+        debtor: {
+          participantId: "participant-beto-asado",
+          userId: "user-beto",
+          participantUsername: "beto",
+          userName: "Beto",
+        },
+        creditor: {
+          participantId: "participant-ana-asado",
+          userId,
+          participantUsername: "ana",
+          userName: "Ana",
+        },
+      }),
+      makeDebtForUser({
+        eventId: "event-cine",
+        amountCents: 2300,
+        debtor: {
+          participantId: "participant-ana-cine",
+          userId,
+          participantUsername: "ana",
+          userName: "Ana",
+        },
+        creditor: {
+          participantId: "participant-cami-cine",
+          userId: "user-cami",
+          participantUsername: "cami",
+          userName: "Cami",
+        },
+      }),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(service.getBalanceSummary(userId)).resolves.toEqual({
+      owedToMeCents: 5000,
+      iOweCents: 2300,
+    });
+    expect(debtRepository.findByUserId).toHaveBeenCalledWith(userId, { statuses: ["pending"] });
+  });
+
+  it("no suma deudas settled aunque sean devueltas por el repositorio", async () => {
+    const debtRepository = createFakeDebtRepository();
+    vi.mocked(debtRepository.findByUserId).mockResolvedValue([
+      makeDebtForUser({
+        amountCents: 5000,
+        status: "settled",
+        creditor: {
+          participantId: "participant-ana",
+          userId,
+          participantUsername: "ana",
+          userName: "Ana",
+        },
+      }),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(service.getBalanceSummary(userId)).resolves.toEqual({
+      owedToMeCents: 0,
+      iOweCents: 0,
+    });
+  });
+
+  it("devuelve ceros cuando el usuario no tiene deudas", async () => {
+    const debtRepository = createFakeDebtRepository();
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(service.getBalanceSummary(userId)).resolves.toEqual({
+      owedToMeCents: 0,
+      iOweCents: 0,
+    });
   });
 });
