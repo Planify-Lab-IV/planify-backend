@@ -90,6 +90,7 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
     name: "Asado",
     location: "Casa de Ana",
     status: "active",
+    expensesClosed: false,
     startDateTime: null,
     createdAt: new Date("2026-09-20T00:00:00.000Z"),
     updatedAt: new Date("2026-09-20T00:00:00.000Z"),

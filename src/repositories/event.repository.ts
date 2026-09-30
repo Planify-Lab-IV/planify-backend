@@ -27,6 +27,7 @@ export interface Event {
   name: string;
   location: string;
   status: EventStatus;
+  expensesClosed: boolean;
   startDateTime: Date | null;
   createdAt: Date;
   updatedAt: Date;

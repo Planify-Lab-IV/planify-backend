@@ -75,6 +75,7 @@ describe("POST /events", () => {
       groupId: "group-1",
       organizerId,
       status: "active",
+      expensesClosed: false,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: new Date("2026-01-01T00:00:00Z"),
       participants: [
@@ -106,6 +107,7 @@ describe("POST /events", () => {
       groupId: "group-1",
       organizerId,
       status: "active",
+      expensesClosed: false,
       participants: [
         {
           eventId: "event-1",
@@ -142,6 +144,7 @@ describe("POST /events", () => {
             groupId: "group-new",
             organizerId,
             status: "active",
+            expensesClosed: false,
             createdAt: new Date(),
             updatedAt: new Date(),
             participants: [],
@@ -179,6 +182,7 @@ describe("GET /events/:eventId", () => {
     name: "Cumpleaños",
     location: "Casa de Ana",
     status: "active",
+    expensesClosed: false,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     participants: [
@@ -227,6 +231,7 @@ describe("GET /events/:eventId", () => {
       name: "Cumpleaños",
       location: "Casa de Ana",
       status: "active",
+      expensesClosed: false,
     });
     expect(response.body.participants).toHaveLength(3);
     expect(response.body.participants).toEqual(
@@ -456,6 +461,7 @@ describe("PATCH /events/:eventId/confirm-schedule", () => {
     groupId: "group-1",
     organizerId,
     status: "active",
+    expensesClosed: false,
     startDateTime: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -493,6 +499,7 @@ describe("PATCH /events/:eventId/confirm-schedule", () => {
     expect(response.body).toMatchObject({
       id: eventId,
       status: "confirmed",
+      expensesClosed: false,
       startDateTime: validBody.startDateTime,
     });
     expect(prisma.event.updateManyAndReturn).toHaveBeenCalledWith({
@@ -580,6 +587,7 @@ describe("PUT /events/:id/cancel", () => {
     groupId: "group-1",
     organizerId,
     status: "active",
+    expensesClosed: false,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     participants: [
@@ -621,7 +629,11 @@ describe("PUT /events/:id/cancel", () => {
       .set("Authorization", `Bearer ${organizerToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ id: event.id, status: "cancelled" });
+    expect(response.body).toMatchObject({
+      id: event.id,
+      status: "cancelled",
+      expensesClosed: false,
+    });
     expect(invalidateSessions).toHaveBeenCalledWith({
       where: { eventId: event.id, isAnonymous: true },
       data: { pinHash: null },
