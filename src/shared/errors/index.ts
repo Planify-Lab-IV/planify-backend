@@ -63,3 +63,10 @@ export class EventUnavailableError extends AppError {
     this.name = "EventUnavailableError";
   }
 }
+
+export class DebtAlreadySettledError extends AppError {
+  constructor() {
+    super("La deuda ya fue saldada", 409, "DEBT_ALREADY_SETTLED");
+    this.name = "DebtAlreadySettledError";
+  }
+}
