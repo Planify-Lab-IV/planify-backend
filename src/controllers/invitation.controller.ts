@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import type { InvitationsService } from "../services/invitations.service.js";
-import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
+import { ValidationError } from "../shared/errors/index.js";
+import { getAuthenticatedUserId, getEventId } from "../shared/request.helpers.js";
 import { validateCreateInvitationDTO } from "../validators/invitation/create.invitation.validator.js";
 
 export interface InvitationController {
@@ -14,15 +15,8 @@ export function createInvitationController(
   return {
     async create(req: Request, res: Response, next: NextFunction): Promise<void> {
       try {
-        const requesterId = req.userId;
-        if (!requesterId) {
-          throw new UnauthorizedError("Usuario no autenticado");
-        }
-
-        const eventId = req.params.eventId;
-        if (typeof eventId !== "string" || eventId.trim() === "") {
-          throw new ValidationError("El eventId es requerido");
-        }
+        const requesterId = getAuthenticatedUserId(req);
+        const eventId = getEventId(req);
 
         const dto = validateCreateInvitationDTO(req.body ?? {});
         const result = await invitationsService.createInvitation(requesterId, eventId, dto);

@@ -6,12 +6,17 @@ export type DebtStatus = "pending" | "settled";
 export interface SimplifiedDebtRecord {
   id: string;
   eventId: string;
-  debtorParticipantId: string;
-  creditorParticipantId: string;
   amountCents: number;
   status: DebtStatus;
   settledAt: Date | null;
   createdAt: Date;
+  debtor: DebtParticipantData;
+  creditor: DebtParticipantData;
+}
+
+export interface DebtParticipantData {
+  id: string;
+  username: string;
 }
 
 export interface DebtRepository {
@@ -24,13 +29,33 @@ export const debtRepository: DebtRepository = {
   async findByEventId(eventId: string): Promise<SimplifiedDebtRecord[]> {
     return prisma.simplifiedDebt.findMany({
       where: { eventId },
-      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        eventId: true,
+        amountCents: true,
+        status: true,
+        settledAt: true,
+        createdAt: true,
+        debtor: { select: { id: true, username: true } },
+        creditor: { select: { id: true, username: true } },
+      },
+      orderBy: [{ status: "asc" }, { amountCents: "desc" }, { id: "asc" }],
     });
   },
 
   async findSettledByEventId(eventId: string): Promise<SimplifiedDebtRecord[]> {
     return prisma.simplifiedDebt.findMany({
       where: { eventId, status: "settled" },
+      select: {
+        id: true,
+        eventId: true,
+        amountCents: true,
+        status: true,
+        settledAt: true,
+        createdAt: true,
+        debtor: { select: { id: true, username: true } },
+        creditor: { select: { id: true, username: true } },
+      },
       orderBy: { createdAt: "asc" },
     });
   },
