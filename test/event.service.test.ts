@@ -56,6 +56,7 @@ function createInMemoryEventRepository(events: Event[]): EventRepository {
       records.set(id, cancelledEvent);
       return cancelledEvent;
     }),
+    closeExpenses: vi.fn(),
     confirmSchedule: vi.fn(async (id, startDateTime) => {
       const event = records.get(id);
       if (!event || event.status === "cancelled") {

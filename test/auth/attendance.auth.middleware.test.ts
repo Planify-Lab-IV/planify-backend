@@ -55,6 +55,7 @@ function makeEventRepository(event: Event | null = activeEvent): EventRepository
     findById: vi.fn(async () => event),
     createAtomic: vi.fn(),
     cancelAtomic: vi.fn(),
+    closeExpenses: vi.fn(),
   };
 }
 

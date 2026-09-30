@@ -57,6 +57,7 @@ function createEventRepository(events: Event[]): EventRepository {
     findById: vi.fn(async (id) => events.find((event) => event.id === id) ?? null),
     createAtomic: vi.fn(),
     cancelAtomic: vi.fn(),
+    closeExpenses: vi.fn(),
     confirmSchedule: vi.fn(),
   };
 }

@@ -409,6 +409,39 @@ describe("EventRepository.cancelAtomic", () => {
   });
 });
 
+describe("EventRepository.closeExpenses", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("marca los gastos como cerrados y devuelve el evento actualizado", async () => {
+    const closedEvent = {
+      id: "event-1",
+      name: "Birthday",
+      location: "Ana's house",
+      groupId: "group-1",
+      organizerId: "user-organizer-1",
+      status: "active",
+      expensesClosed: true,
+      startDateTime: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-02T00:00:00Z"),
+      participants: [],
+    };
+    vi.mocked(prisma.event.update).mockResolvedValueOnce(closedEvent as never);
+
+    await expect(eventRepository.closeExpenses("event-1")).resolves.toMatchObject({
+      id: "event-1",
+      status: "active",
+      expensesClosed: true,
+    });
+
+    expect(prisma.event.update).toHaveBeenCalledWith({
+      where: { id: "event-1" },
+      data: { expensesClosed: true },
+      include: { participants: true },
+    });
+  });
+});
+
 describe("EventRepository.confirmSchedule", () => {
   beforeEach(() => vi.clearAllMocks());
 

@@ -54,6 +54,7 @@ export interface EventRepository {
   findById(id: string): Promise<Event | null>;
   createAtomic(params: CreateEventParams): Promise<Event>;
   cancelAtomic(id: string): Promise<Event>;
+  closeExpenses(id: string): Promise<Event>;
   confirmSchedule(id: string, startDateTime: Date): Promise<Event | null>;
 }
 
@@ -130,6 +131,16 @@ export const eventRepository: EventRepository = {
 
       return { ...event, status: parseEventStatus(event.status) };
     });
+  },
+
+  async closeExpenses(id: string): Promise<Event> {
+    const event = await prisma.event.update({
+      where: { id },
+      data: { expensesClosed: true },
+      include: { participants: true },
+    });
+
+    return { ...event, status: parseEventStatus(event.status) };
   },
 
   // --> Establece el evento como confirmado junto al horario de comienzo
