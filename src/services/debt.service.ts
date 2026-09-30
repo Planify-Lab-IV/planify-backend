@@ -1,11 +1,7 @@
 import type { Expense, ExpenseRepository } from "../repositories/expense.repository.js";
 import type { DebtRepository, SimplifiedDebtRecord } from "../repositories/debt.repository.js";
+import type { PersonKey, UserBalanceSummary } from "../types/balance.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
-
-export interface UserBalanceSummary {
-  owedToMeCents: number;
-  iOweCents: number;
-}
 
 export interface DebtService {
   recalculateForEvent(eventId: string): Promise<void>;
@@ -85,4 +81,17 @@ export function createDebtService(
       return { owedToMeCents, iOweCents };
     },
   };
+}
+
+export function toPersonKey(participant: {
+  participantId: string;
+  userId: string | null;
+}): PersonKey {
+  return participant.userId
+    ? `user:${participant.userId}`
+    : `participant:${participant.participantId}`;
+}
+
+export function isPersonKey(value: string): value is PersonKey {
+  return /^(user|participant):[^:]+$/.test(value);
 }

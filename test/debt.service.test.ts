@@ -5,7 +5,12 @@ import type {
   DebtRepository,
   SimplifiedDebtRecord,
 } from "../src/repositories/debt.repository.js";
-import { buildParticipantAmounts, createDebtService } from "../src/services/debt.service.js";
+import {
+  buildParticipantAmounts,
+  createDebtService,
+  isPersonKey,
+  toPersonKey,
+} from "../src/services/debt.service.js";
 
 function makeExpense(
   id: string,
@@ -103,6 +108,34 @@ function makeDebtForUser(overrides: Partial<DebtForUserRecord> = {}): DebtForUse
     ...overrides,
   };
 }
+
+describe("personKey", () => {
+  it("identifica a una contraparte registrada por su userId", () => {
+    expect(toPersonKey({ participantId: "participant-marcos-asado", userId: "user-marcos" })).toBe(
+      "user:user-marcos",
+    );
+  });
+
+  it("identifica a una contraparte anónima por su participantId", () => {
+    expect(toPersonKey({ participantId: "participant-invitado", userId: null })).toBe(
+      "participant:participant-invitado",
+    );
+  });
+
+  it.each(["user:user-marcos", "participant:participant-invitado"])(
+    "acepta la clave válida %s",
+    (personKey) => {
+      expect(isPersonKey(personKey)).toBe(true);
+    },
+  );
+
+  it.each(["user:", "participant:", "person:user-marcos", "user:user:marcos", ""])(
+    "rechaza la clave inválida %s",
+    (personKey) => {
+      expect(isPersonKey(personKey)).toBe(false);
+    },
+  );
+});
 
 describe("buildParticipantAmounts", () => {
   it("devuelve una lista vacía cuando no hay gastos ni deudas saldadas", () => {
