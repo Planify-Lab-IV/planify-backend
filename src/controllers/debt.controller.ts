@@ -31,8 +31,8 @@ export function createDebtController(debtService: DebtService): DebtController {
         const debtId = getDebtId(req);
         const actor = getAttendanceActor(req);
 
-        const { debt, eventAllDebtsSettled } = await debtService.settleDebt(eventId, debtId, actor);
-        res.status(200).json(toDebtSettlementResponseDTO(debt, eventAllDebtsSettled));
+        const { debt, allEventDebtsSettled } = await debtService.settleDebt(eventId, debtId, actor);
+        res.status(200).json(toDebtSettlementResponseDTO(debt, allEventDebtsSettled));
       } catch (error) {
         next(error);
       }

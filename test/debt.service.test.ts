@@ -542,7 +542,7 @@ describe("DebtService.settleDebt", () => {
         status: "settled",
         settledAt: expect.any(Date),
       }),
-      eventAllDebtsSettled: true,
+      allEventDebtsSettled: true,
     });
 
     expect(debtRepository.getRecords()[0]).toMatchObject({
@@ -563,7 +563,7 @@ describe("DebtService.settleDebt", () => {
       service.settleDebt(eventId, debtId, { type: "user", userId: "user-beto" }),
     ).resolves.toMatchObject({
       debt: { status: "settled" },
-      eventAllDebtsSettled: true,
+      allEventDebtsSettled: true,
     });
   });
 
@@ -581,7 +581,7 @@ describe("DebtService.settleDebt", () => {
       }),
     ).resolves.toMatchObject({
       debt: { status: "settled" },
-      eventAllDebtsSettled: true,
+      allEventDebtsSettled: true,
     });
   });
 
@@ -594,7 +594,7 @@ describe("DebtService.settleDebt", () => {
 
     await expect(
       service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
-    ).resolves.toMatchObject({ eventAllDebtsSettled: false });
+    ).resolves.toMatchObject({ allEventDebtsSettled: false });
   });
 
   it("rechaza una deuda que ya fue saldada", async () => {

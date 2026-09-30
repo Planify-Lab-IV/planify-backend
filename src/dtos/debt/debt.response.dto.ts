@@ -62,6 +62,6 @@ export function toDebtSettlementResponseDTO(
 ): DebtSettlementResponseDTO {
   return {
     debt: toEventDebtResponseDTO(debt),
-    allEventDebtsSettled: allEventDebtsSettled,
+    allEventDebtsSettled,
   };
 }

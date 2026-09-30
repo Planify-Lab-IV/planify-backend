@@ -101,6 +101,10 @@ router.get("/events/:eventId/debts", requireAttendanceAuth, (req, res, next) =>
   debtController.listEventDebts(req, res, next),
 );
 
+router.post("/events/:eventId/debts/:debtId/settle", requireAttendanceAuth, (req, res, next) =>
+  debtController.settle(req, res, next),
+);
+
 const invitationsService = createInvitationsService(eventRepository, invitationRepository);
 const invitationController = createInvitationController(invitationsService);
 
