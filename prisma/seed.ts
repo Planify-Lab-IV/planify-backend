@@ -28,9 +28,33 @@ const DEV_USERS = [
   },
 ];
 
-// --> Itera los 3 users, genera hash y hace upsert de manera que se pueda ejecutar las veces que sea
+const CASUAL_USERS = [
+  {
+    name: "nico",
+    username: "nico",
+    email: "nico@planify.dev",
+    passwordPlano: "Nico123!",
+  },
+
+  {
+    name: "juan",
+    username: "juan",
+    email: "juan@planify.dev",
+    passwordPlano: "Juan123!",
+  },
+  {
+    name: "marta",
+    username: "marta",
+    email: "marta@planify.dev",
+    passwordPlano: "Marta123!",
+  },
+];
+
+const USERS = [...DEV_USERS, ...CASUAL_USERS];
+
+// --> Itera los users, genera hash y hace upsert de manera que se pueda ejecutar las veces que sea
 async function main() {
-  for (const u of DEV_USERS) {
+  for (const u of USERS) {
     const passwordHash = await hasher.hash(u.passwordPlano);
 
     const user = await prisma.user.upsert({
