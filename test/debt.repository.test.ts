@@ -108,11 +108,11 @@ describe("DebtRepository.findByUserId", () => {
     vi.clearAllMocks();
   });
 
-  it("obtiene las deudas de un usuario para los estados solicitados", async () => {
+  it("obtiene pendientes y saldadas de un usuario cuando ambos estados son solicitados", async () => {
     const records = [
       {
         amountCents: 1500,
-        status: "pending" as const,
+        status: "settled" as const,
         eventId: "event-1",
         debtor: {
           id: "participant-ana",
@@ -133,7 +133,7 @@ describe("DebtRepository.findByUserId", () => {
     vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce(records as never);
 
     await expect(
-      debtRepository.findByUserId("user-ana", { statuses: ["pending"] }),
+      debtRepository.findByUserId("user-ana", { statuses: ["pending", "settled"] }),
     ).resolves.toEqual([
       {
         debtor: {
@@ -149,7 +149,7 @@ describe("DebtRepository.findByUserId", () => {
           userName: null,
         },
         amountCents: 1500,
-        status: "pending",
+        status: "settled",
         eventId: "event-1",
         eventName: "Cena",
       },
@@ -157,7 +157,7 @@ describe("DebtRepository.findByUserId", () => {
 
     expect(prisma.simplifiedDebt.findMany).toHaveBeenCalledWith({
       where: {
-        status: { in: ["pending"] },
+        status: { in: ["pending", "settled"] },
         OR: [{ debtor: { userId: "user-ana" } }, { creditor: { userId: "user-ana" } }],
       },
       select: {
