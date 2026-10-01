@@ -17,6 +17,7 @@ import type { CreateEventDTO } from "../validators/event/event.validator.js";
 export interface EventService {
   createEvent(organizerId: string, dto: CreateEventDTO): Promise<Event>;
   cancel(userId: string, eventId: string): Promise<Event>;
+  closeExpenses(userId: string, eventId: string): Promise<Event>;
   confirmSchedule(userId: string, eventId: string, startDateTime: Date): Promise<Event>;
   answerAttendance(
     eventId: string,
@@ -158,6 +159,28 @@ export function createEventService(
       }
 
       return eventRepository.cancelAtomic(eventId);
+    },
+
+    async closeExpenses(userId: string, eventId: string): Promise<Event> {
+      const event = await eventRepository.findById(eventId);
+
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      if (event.organizerId !== userId) {
+        throw new ForbiddenError("Solo el organizador puede cerrar los gastos del evento");
+      }
+
+      if (event.status === "cancelled") {
+        throw new EventUnavailableError();
+      }
+
+      if (event.expensesClosed) {
+        return event;
+      }
+
+      return eventRepository.closeExpenses(eventId);
     },
 
     async confirmSchedule(userId: string, eventId: string, startDateTime: Date): Promise<Event> {
