@@ -5,6 +5,11 @@ import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { ForbiddenError, NotFoundError } from "../shared/errors/index.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
 
+export interface UserBalanceSummary {
+  owedToMeCents: number;
+  iOweCents: number;
+}
+
 export interface EventDebts {
   debts: SimplifiedDebtRecord[];
   allSettled: boolean;
@@ -13,6 +18,7 @@ export interface EventDebts {
 export interface DebtService {
   recalculateForEvent(eventId: string): Promise<void>;
   listEventDebts(eventId: string, actor: AttendanceActor): Promise<EventDebts>;
+  getBalanceSummary(userId: string): Promise<UserBalanceSummary>;
 }
 
 export function buildParticipantAmounts(
@@ -94,6 +100,26 @@ export function createDebtService(
       const simplifiedDebts = simplifyDebts(participantAmounts);
 
       await debtRepository.replacePendingForEvent(eventId, simplifiedDebts);
+    },
+
+    async getBalanceSummary(userId: string): Promise<UserBalanceSummary> {
+      const debts = await debtRepository.findByUserId(userId, { statuses: ["pending"] });
+      let owedToMeCents = 0;
+      let iOweCents = 0;
+
+      for (const debt of debts) {
+        if (debt.status !== "pending") continue;
+
+        if (debt.creditor.userId === userId) {
+          owedToMeCents += debt.amountCents;
+        }
+
+        if (debt.debtor.userId === userId) {
+          iOweCents += debt.amountCents;
+        }
+      }
+
+      return { owedToMeCents, iOweCents };
     },
   };
 }
