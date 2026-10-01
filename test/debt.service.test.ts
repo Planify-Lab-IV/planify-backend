@@ -9,6 +9,7 @@ import type { SimplifiedDebt } from "../src/services/debt-simplification.service
 import {
   buildParticipantAmounts,
   isPersonKey,
+  parsePersonKey,
   toPersonKey,
   createDebtService as createDebtServiceImplementation,
 } from "../src/services/debt.service.js";
@@ -227,10 +228,25 @@ describe("personKey", () => {
     },
   );
 
-  it.each(["user:", "participant:", "person:user-marcos", "user:user:marcos", ""])(
+  it("parsea una contraparte registrada", () => {
+    expect(parsePersonKey("user:user-marcos")).toEqual({
+      type: "user",
+      userId: "user-marcos",
+    });
+  });
+
+  it("parsea una contraparte anónima", () => {
+    expect(parsePersonKey("participant:participant-invitado")).toEqual({
+      type: "participant",
+      participantId: "participant-invitado",
+    });
+  });
+
+  it.each(["user:", "participant:", "person:user-marcos", "user:user:marcos", "user: ", ""])(
     "rechaza la clave inválida %s",
     (personKey) => {
       expect(isPersonKey(personKey)).toBe(false);
+      expect(parsePersonKey(personKey)).toBeNull();
     },
   );
 });

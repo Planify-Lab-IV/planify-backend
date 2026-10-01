@@ -5,6 +5,7 @@ import type {
   DebtRepository,
   SimplifiedDebtRecord,
 } from "../repositories/debt.repository.js";
+import { parsePersonKey } from "../types/balance.js";
 import type {
   BalanceDirection,
   PersonBalance,
@@ -23,6 +24,7 @@ import {
 } from "../shared/errors/index.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
 import type { Event, EventRepository } from "../repositories/event.repository.js";
+export { isPersonKey, parsePersonKey } from "../types/balance.js";
 
 export interface EventDebts {
   debts: SimplifiedDebtRecord[];
@@ -172,7 +174,7 @@ export function createDebtService(
     },
 
     async getPersonDetail(userId: string, personKey: string): Promise<PersonBalanceDetail> {
-      if (!isPersonKey(personKey)) {
+      if (!parsePersonKey(personKey)) {
         throw new ValidationError("La clave de persona es inválida");
       }
 
@@ -303,8 +305,4 @@ export function toPersonKey(participant: {
   return participant.userId
     ? `user:${participant.userId}`
     : `participant:${participant.participantId}`;
-}
-
-export function isPersonKey(value: string): value is PersonKey {
-  return /^(user|participant):[^:]+$/.test(value);
 }
