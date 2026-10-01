@@ -5,9 +5,9 @@ import type {
   DebtRepository,
   SimplifiedDebtRecord,
 } from "../src/repositories/debt.repository.js";
+import type { SimplifiedDebt } from "../src/services/debt-simplification.service.js";
 import {
   buildParticipantAmounts,
-  createDebtService,
   isPersonKey,
   toPersonKey,
   createDebtService as createDebtServiceImplementation,
@@ -50,8 +50,6 @@ function makeSettledDebt(
   return {
     id,
     eventId,
-    debtorParticipantId,
-    creditorParticipantId,
     amountCents,
     status: "settled",
     settledAt: new Date("2026-09-21T00:00:00.000Z"),
@@ -111,17 +109,15 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
     replacePendingForEvent: vi.fn(async (eventId, debts) => {
       records = records.filter((d) => !(d.eventId === eventId && d.status === "pending"));
       records.push(
-        ...debts.map((d, index) => ({
+        ...debts.map((debt: SimplifiedDebt, index: number) => ({
           id: `debt-pending-${index}`,
           eventId,
-          debtorParticipantId: d.debtorParticipantId,
-          creditorParticipantId: d.creditorParticipantId,
-          amountCents: d.amountCents,
+          amountCents: debt.amountCents,
           status: "pending" as const,
           settledAt: null,
           createdAt: new Date("2026-09-22T00:00:00.000Z"),
-          debtor: { id: d.debtorParticipantId, username: d.debtorParticipantId },
-          creditor: { id: d.creditorParticipantId, username: d.creditorParticipantId },
+          debtor: { id: debt.debtorParticipantId, username: debt.debtorParticipantId },
+          creditor: { id: debt.creditorParticipantId, username: debt.creditorParticipantId },
         })),
       );
     }),
