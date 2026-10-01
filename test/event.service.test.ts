@@ -24,6 +24,7 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
     name: "Cumpleaños",
     location: "Casa de Ana",
     status: "active",
+    expensesClosed: false,
     startDateTime: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -56,6 +57,16 @@ function createInMemoryEventRepository(events: Event[]): EventRepository {
       const cancelledEvent = { ...event, status: "cancelled" as const };
       records.set(id, cancelledEvent);
       return cancelledEvent;
+    }),
+    closeExpenses: vi.fn(async (id) => {
+      const event = records.get(id);
+      if (!event) {
+        throw new Error("El evento debe existir antes de cerrar sus gastos");
+      }
+
+      const closedEvent = { ...event, expensesClosed: true };
+      records.set(id, closedEvent);
+      return closedEvent;
     }),
     confirmSchedule: vi.fn(async (id, startDateTime) => {
       const event = records.get(id);
@@ -358,6 +369,75 @@ describe("EventService.cancel", () => {
 
     await expect(service.cancel("user-organizer", "event-1")).resolves.toBe(cancelledEvent);
     expect(eventRepository.cancelAtomic).not.toHaveBeenCalled();
+  });
+});
+
+describe("EventService.closeExpenses", () => {
+  function makeService(event: Event | null = makeEvent()) {
+    const eventRepository = createInMemoryEventRepository(event ? [event] : []);
+    const service = createEventService(
+      eventRepository,
+      unusedGroupRepository,
+      unusedUserRepository,
+      unusedParticipantRepository,
+    );
+
+    return { service, eventRepository };
+  }
+
+  it("permite al organizador cerrar los gastos de un evento activo", async () => {
+    const { service, eventRepository } = makeService();
+
+    await expect(service.closeExpenses("user-organizer", "event-1")).resolves.toMatchObject({
+      id: "event-1",
+      expensesClosed: true,
+    });
+    expect(eventRepository.closeExpenses).toHaveBeenCalledWith("event-1");
+  });
+
+  it("permite cerrar los gastos de un evento confirmado", async () => {
+    const { service, eventRepository } = makeService(makeEvent({ status: "confirmed" }));
+
+    await expect(service.closeExpenses("user-organizer", "event-1")).resolves.toMatchObject({
+      status: "confirmed",
+      expensesClosed: true,
+    });
+    expect(eventRepository.closeExpenses).toHaveBeenCalledWith("event-1");
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    const { service, eventRepository } = makeService(null);
+
+    await expect(service.closeExpenses("user-organizer", "event-unknown")).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+    expect(eventRepository.closeExpenses).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si quien intenta cerrar los gastos no es el organizador", async () => {
+    const { service, eventRepository } = makeService();
+
+    await expect(service.closeExpenses("user-member", "event-1")).rejects.toBeInstanceOf(
+      ForbiddenError,
+    );
+    expect(eventRepository.closeExpenses).not.toHaveBeenCalled();
+  });
+
+  it("rechaza el cierre de gastos de un evento cancelado", async () => {
+    const { service, eventRepository } = makeService(makeEvent({ status: "cancelled" }));
+
+    await expect(service.closeExpenses("user-organizer", "event-1")).rejects.toBeInstanceOf(
+      EventUnavailableError,
+    );
+    expect(eventRepository.closeExpenses).not.toHaveBeenCalled();
+  });
+
+  it("es idempotente cuando los gastos ya están cerrados", async () => {
+    const closedEvent = makeEvent({ expensesClosed: true });
+    const { service, eventRepository } = makeService(closedEvent);
+
+    await expect(service.closeExpenses("user-organizer", "event-1")).resolves.toBe(closedEvent);
+    expect(eventRepository.closeExpenses).not.toHaveBeenCalled();
   });
 });
 

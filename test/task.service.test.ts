@@ -16,6 +16,7 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
     name: "Asado",
     location: "Casa de Ana",
     status: "active",
+    expensesClosed: false,
     startDateTime: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -56,6 +57,7 @@ function createEventRepository(events: Event[]): EventRepository {
     findById: vi.fn(async (id) => events.find((event) => event.id === id) ?? null),
     createAtomic: vi.fn(),
     cancelAtomic: vi.fn(),
+    closeExpenses: vi.fn(),
     confirmSchedule: vi.fn(),
   };
 }

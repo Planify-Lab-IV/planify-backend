@@ -16,6 +16,7 @@ export interface EventResponseDTO {
   organizerId: string;
   groupId: string;
   status: EventStatus;
+  expensesClosed: boolean;
   startDateTime: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -30,6 +31,7 @@ export function toEventResponseDTO(event: Event): EventResponseDTO {
     organizerId: event.organizerId,
     groupId: event.groupId,
     status: event.status,
+    expensesClosed: event.expensesClosed,
     startDateTime: event.startDateTime,
     createdAt: event.createdAt,
     updatedAt: event.updatedAt,

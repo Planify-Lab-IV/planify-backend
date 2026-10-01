@@ -29,6 +29,8 @@ const activeEvent: Event = {
   name: "Cumpleaños",
   location: "Casa de Ana",
   status: "active",
+  expensesClosed: false,
+  startDateTime: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   participants: [],
@@ -53,6 +55,7 @@ function makeEventRepository(event: Event | null = activeEvent): EventRepository
     findById: vi.fn(async () => event),
     createAtomic: vi.fn(),
     cancelAtomic: vi.fn(),
+    closeExpenses: vi.fn(),
   };
 }
 

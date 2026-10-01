@@ -76,6 +76,7 @@ describe("POST /events", () => {
       groupId: "group-1",
       organizerId,
       status: "active",
+      expensesClosed: false,
       createdAt: new Date("2026-01-01T00:00:00Z"),
       updatedAt: new Date("2026-01-01T00:00:00Z"),
       participants: [
@@ -107,6 +108,7 @@ describe("POST /events", () => {
       groupId: "group-1",
       organizerId,
       status: "active",
+      expensesClosed: false,
       participants: [
         {
           eventId: "event-1",
@@ -143,6 +145,7 @@ describe("POST /events", () => {
             groupId: "group-new",
             organizerId,
             status: "active",
+            expensesClosed: false,
             createdAt: new Date(),
             updatedAt: new Date(),
             participants: [],
@@ -180,6 +183,7 @@ describe("GET /events/:eventId", () => {
     name: "Cumpleaños",
     location: "Casa de Ana",
     status: "active",
+    expensesClosed: false,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     participants: [
@@ -228,6 +232,7 @@ describe("GET /events/:eventId", () => {
       name: "Cumpleaños",
       location: "Casa de Ana",
       status: "active",
+      expensesClosed: false,
     });
     expect(response.body.participants).toHaveLength(3);
     expect(response.body.participants).toEqual(
@@ -405,6 +410,159 @@ describe("EventRepository.cancelAtomic", () => {
   });
 });
 
+describe("EventRepository.closeExpenses", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("marca los gastos como cerrados y devuelve el evento actualizado", async () => {
+    const closedEvent = {
+      id: "event-1",
+      name: "Birthday",
+      location: "Ana's house",
+      groupId: "group-1",
+      organizerId: "user-organizer-1",
+      status: "active",
+      expensesClosed: true,
+      startDateTime: null,
+      createdAt: new Date("2026-01-01T00:00:00Z"),
+      updatedAt: new Date("2026-01-02T00:00:00Z"),
+      participants: [],
+    };
+    vi.mocked(prisma.event.update).mockResolvedValueOnce(closedEvent as never);
+
+    await expect(eventRepository.closeExpenses("event-1")).resolves.toMatchObject({
+      id: "event-1",
+      status: "active",
+      expensesClosed: true,
+    });
+
+    expect(prisma.event.update).toHaveBeenCalledWith({
+      where: { id: "event-1" },
+      data: { expensesClosed: true },
+      include: { participants: true },
+    });
+  });
+});
+
+describe("POST /events/:eventId/expenses/close", () => {
+  const eventId = "event-close-1";
+  const organizerId = "user-organizer";
+  const tokenService = createSessionTokenService(env.JWT_SECRET);
+  const organizerToken = tokenService.sign(organizerId);
+  const event = {
+    id: eventId,
+    name: "Birthday",
+    location: "Ana's house",
+    groupId: "group-1",
+    organizerId,
+    status: "active",
+    expensesClosed: false,
+    startDateTime: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    participants: [],
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("permite al organizador cerrar gastos y devuelve el evento actualizado", async () => {
+    const closedEvent = { ...event, expensesClosed: true };
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.event.update).mockResolvedValueOnce(closedEvent as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: eventId,
+      expensesClosed: true,
+    });
+    expect(prisma.event.update).toHaveBeenCalledWith({
+      where: { id: eventId },
+      data: { expensesClosed: true },
+      include: { participants: true },
+    });
+  });
+
+  it("requiere autenticación de usuario", async () => {
+    const response = await request(app).post(`/events/${eventId}/expenses/close`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rechaza el token de participante anónimo", async () => {
+    const anonymousToken = tokenService.signParticipant("participant-anonymous", eventId);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${anonymousToken}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si quien cierra no es el organizador", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-member")}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("rechaza el cierre de gastos de un evento cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EVENT_UNAVAILABLE");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("es idempotente cuando los gastos ya están cerrados", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      expensesClosed: true,
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: eventId,
+      expensesClosed: true,
+    });
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("EventRepository.confirmSchedule", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -457,6 +615,7 @@ describe("PATCH /events/:eventId/confirm-schedule", () => {
     groupId: "group-1",
     organizerId,
     status: "active",
+    expensesClosed: false,
     startDateTime: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
@@ -494,6 +653,7 @@ describe("PATCH /events/:eventId/confirm-schedule", () => {
     expect(response.body).toMatchObject({
       id: eventId,
       status: "confirmed",
+      expensesClosed: false,
       startDateTime: validBody.startDateTime,
     });
     expect(prisma.event.updateManyAndReturn).toHaveBeenCalledWith({
@@ -581,6 +741,7 @@ describe("PUT /events/:id/cancel", () => {
     groupId: "group-1",
     organizerId,
     status: "active",
+    expensesClosed: false,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     participants: [
@@ -623,7 +784,11 @@ describe("PUT /events/:id/cancel", () => {
       .set("Authorization", `Bearer ${organizerToken}`);
 
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ id: event.id, status: "cancelled" });
+    expect(response.body).toMatchObject({
+      id: event.id,
+      status: "cancelled",
+      expensesClosed: false,
+    });
     expect(invalidateSessions).toHaveBeenCalledWith({
       where: { eventId: event.id, isAnonymous: true },
       data: { pinHash: null },

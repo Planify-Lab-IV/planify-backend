@@ -9,6 +9,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     event: {
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     eventParticipant: {
       findUnique: vi.fn(),
@@ -157,6 +158,61 @@ describe("POST /events/:eventId/expenses", () => {
     expect(response.status).toBe(409);
     expect(response.body.error).toBe("EVENT_UNAVAILABLE");
     expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 409 si los gastos del evento están cerrados", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "active",
+      expensesClosed: true,
+      participants: [],
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EXPENSES_CLOSED");
+    expect(prisma.eventParticipant.findFirst).not.toHaveBeenCalled();
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("impide crear gastos después de que el organizador los cierra", async () => {
+    const openEvent = {
+      id: eventId,
+      name: "Cena",
+      location: "Casa de Ana",
+      groupId: "group-1",
+      organizerId: userId,
+      status: "active",
+      expensesClosed: false,
+      startDateTime: null,
+      createdAt: new Date("2026-09-20T00:00:00.000Z"),
+      updatedAt: new Date("2026-09-20T00:00:00.000Z"),
+      participants: [],
+    };
+    const closedEvent = { ...openEvent, expensesClosed: true };
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce(openEvent as never)
+      .mockResolvedValueOnce(closedEvent as never);
+    vi.mocked(prisma.event.update).mockResolvedValueOnce(closedEvent as never);
+
+    const closeResponse = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${token}`);
+    const expenseResponse = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(closeResponse.status).toBe(200);
+    expect(closeResponse.body.expensesClosed).toBe(true);
+    expect(expenseResponse.status).toBe(409);
+    expect(expenseResponse.body.error).toBe("EXPENSES_CLOSED");
     expect(prisma.expense.create).not.toHaveBeenCalled();
   });
 
