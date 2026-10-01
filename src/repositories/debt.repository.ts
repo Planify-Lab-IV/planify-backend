@@ -40,13 +40,31 @@ export interface DebtForUserRecord {
 }
 
 export interface DebtRepository {
+  findById(debtId: string): Promise<SimplifiedDebtRecord | null>;
   findByEventId(eventId: string): Promise<SimplifiedDebtRecord[]>;
   findSettledByEventId(eventId: string): Promise<SimplifiedDebtRecord[]>;
+  markSettled(debtId: string, settledAt: Date): Promise<number>;
   findByUserId(userId: string, statusOptions: FindByUserIdOptions): Promise<DebtForUserRecord[]>;
   replacePendingForEvent(eventId: string, debts: SimplifiedDebt[]): Promise<void>;
 }
 
 export const debtRepository: DebtRepository = {
+  async findById(debtId: string): Promise<SimplifiedDebtRecord | null> {
+    return prisma.simplifiedDebt.findUnique({
+      where: { id: debtId },
+      select: {
+        id: true,
+        eventId: true,
+        amountCents: true,
+        status: true,
+        settledAt: true,
+        createdAt: true,
+        debtor: { select: { id: true, username: true } },
+        creditor: { select: { id: true, username: true } },
+      },
+    });
+  },
+
   async findByEventId(eventId: string): Promise<SimplifiedDebtRecord[]> {
     return prisma.simplifiedDebt.findMany({
       where: { eventId },
@@ -79,6 +97,15 @@ export const debtRepository: DebtRepository = {
       },
       orderBy: { createdAt: "asc" },
     });
+  },
+
+  async markSettled(debtId: string, settledAt: Date): Promise<number> {
+    const { count } = await prisma.simplifiedDebt.updateMany({
+      where: { id: debtId, status: "pending" },
+      data: { status: "settled", settledAt },
+    });
+
+    return count;
   },
 
   async findByUserId(

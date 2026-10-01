@@ -5,14 +5,20 @@ import type {
   DebtRepository,
   SimplifiedDebtRecord,
 } from "../src/repositories/debt.repository.js";
-import { NotFoundError, ValidationError, ForbiddenError } from "../src/shared/errors/index.js";
+import type { SimplifiedDebt } from "../src/services/debt-simplification.service.js";
 import {
   buildParticipantAmounts,
-  createDebtService,
   isPersonKey,
   toPersonKey,
   createDebtService as createDebtServiceImplementation,
 } from "../src/services/debt.service.js";
+import {
+  DebtAlreadySettledError,
+  EventUnavailableError,
+  ForbiddenError,
+  NotFoundError,
+  ValidationError,
+} from "../src/shared/errors/index.js";
 import type { Event, EventRepository } from "../src/repositories/event.repository.js";
 
 function makeExpense(
@@ -44,14 +50,26 @@ function makeSettledDebt(
   return {
     id,
     eventId,
-    debtorParticipantId,
-    creditorParticipantId,
     amountCents,
     status: "settled",
     settledAt: new Date("2026-09-21T00:00:00.000Z"),
     createdAt: new Date("2026-09-20T00:00:00.000Z"),
     debtor: { id: debtorParticipantId, username: debtorParticipantId },
     creditor: { id: creditorParticipantId, username: creditorParticipantId },
+  };
+}
+
+function makePendingDebt(
+  id: string,
+  eventId: string,
+  debtorParticipantId: string,
+  creditorParticipantId: string,
+  amountCents: number,
+): SimplifiedDebtRecord {
+  return {
+    ...makeSettledDebt(id, eventId, debtorParticipantId, creditorParticipantId, amountCents),
+    status: "pending",
+    settledAt: null,
   };
 }
 
@@ -69,25 +87,37 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
   let records = [...initialDebts];
   return {
     getRecords: () => records,
+    findById: vi.fn(async (debtId) => records.find((debt) => debt.id === debtId) ?? null),
     findByEventId: vi.fn(async (eventId) => records.filter((d) => d.eventId === eventId)),
     findSettledByEventId: vi.fn(async (eventId) =>
       records.filter((d) => d.eventId === eventId && d.status === "settled"),
     ),
     findByUserId: vi.fn(async () => []),
+    markSettled: vi.fn(async (debtId, settledAt) => {
+      const debtIndex = records.findIndex(
+        (debt) => debt.id === debtId && debt.status === "pending",
+      );
+
+      if (debtIndex === -1) {
+        return 0;
+      }
+
+      const debt = records[debtIndex]!;
+      records[debtIndex] = { ...debt, status: "settled", settledAt };
+      return 1;
+    }),
     replacePendingForEvent: vi.fn(async (eventId, debts) => {
       records = records.filter((d) => !(d.eventId === eventId && d.status === "pending"));
       records.push(
-        ...debts.map((d, index) => ({
+        ...debts.map((debt: SimplifiedDebt, index: number) => ({
           id: `debt-pending-${index}`,
           eventId,
-          debtorParticipantId: d.debtorParticipantId,
-          creditorParticipantId: d.creditorParticipantId,
-          amountCents: d.amountCents,
+          amountCents: debt.amountCents,
           status: "pending" as const,
           settledAt: null,
           createdAt: new Date("2026-09-22T00:00:00.000Z"),
-          debtor: { id: d.debtorParticipantId, username: d.debtorParticipantId },
-          creditor: { id: d.creditorParticipantId, username: d.creditorParticipantId },
+          debtor: { id: debt.debtorParticipantId, username: debt.debtorParticipantId },
+          creditor: { id: debt.creditorParticipantId, username: debt.creditorParticipantId },
         })),
       );
     }),
@@ -135,6 +165,14 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
         username: "ana",
         isAnonymous: false,
         isOrganizer: true,
+      },
+      {
+        id: "participant-beto",
+        eventId: "event-1",
+        userId: "user-beto",
+        username: "beto",
+        isAnonymous: false,
+        isOrganizer: false,
       },
       {
         id: "participant-anonymous",
@@ -847,5 +885,170 @@ describe("DebtService.getPersonDetail", () => {
     await expect(service.getPersonDetail(userId, "user:user-inexistente")).rejects.toBeInstanceOf(
       NotFoundError,
     );
+  });
+});
+
+describe("DebtService.settleDebt", () => {
+  const eventId = "event-1";
+  const debtId = "debt-1";
+
+  it("permite al deudor saldar una deuda pendiente sin recalcular", async () => {
+    const debt = makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500);
+    const expenseRepository = createFakeExpenseRepository();
+    const debtRepository = createFakeDebtRepository([debt]);
+    const service = createDebtService(expenseRepository, debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).resolves.toEqual({
+      debt: expect.objectContaining({
+        ...debt,
+        status: "settled",
+        settledAt: expect.any(Date),
+      }),
+      allEventDebtsSettled: true,
+    });
+
+    expect(debtRepository.getRecords()[0]).toMatchObject({
+      status: "settled",
+      settledAt: expect.any(Date),
+    });
+    expect(expenseRepository.findByEventId).not.toHaveBeenCalled();
+    expect(debtRepository.replacePendingForEvent).not.toHaveBeenCalled();
+  });
+
+  it("permite al acreedor saldar una deuda pendiente", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-beto" }),
+    ).resolves.toMatchObject({
+      debt: { status: "settled" },
+      allEventDebtsSettled: true,
+    });
+  });
+
+  it("permite al deudor anónimo saldar una deuda pendiente", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-anonymous", "participant-beto", 1500),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, {
+        type: "anonymousParticipant",
+        participantId: "participant-anonymous",
+        eventId,
+      }),
+    ).resolves.toMatchObject({
+      debt: { status: "settled" },
+      allEventDebtsSettled: true,
+    });
+  });
+
+  it("informa false cuando quedan otras deudas pendientes", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500),
+      makePendingDebt("debt-2", eventId, "participant-beto", "participant-anonymous", 500),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).resolves.toMatchObject({ allEventDebtsSettled: false });
+  });
+
+  it("rechaza una deuda que ya fue saldada", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makeSettledDebt(debtId, eventId, "participant-ana", "participant-beto", 1500),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).rejects.toBeInstanceOf(DebtAlreadySettledError);
+    expect(debtRepository.markSettled).not.toHaveBeenCalled();
+  });
+
+  it("rechaza el segundo saldado detectado por la actualización condicional", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500),
+    ]);
+    vi.mocked(debtRepository.markSettled).mockResolvedValueOnce(0);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).rejects.toBeInstanceOf(DebtAlreadySettledError);
+  });
+
+  it("prohíbe a un participante que no es parte de la deuda", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-beto", "participant-anonymous", 1500),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+    expect(debtRepository.markSettled).not.toHaveBeenCalled();
+  });
+
+  it("oculta una deuda de otro evento como no encontrada", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, "event-2", "participant-ana", "participant-beto", 1500),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(debtRepository.markSettled).not.toHaveBeenCalled();
+  });
+
+  it("rechaza un evento cancelado", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500),
+    ]);
+    const service = createDebtService(
+      createFakeExpenseRepository(),
+      debtRepository,
+      makeEvent({ status: "cancelled" }),
+    );
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).rejects.toBeInstanceOf(EventUnavailableError);
+    expect(debtRepository.findById).not.toHaveBeenCalled();
+  });
+
+  it("permite saldar en un evento confirmado", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500),
+    ]);
+    const service = createDebtService(
+      createFakeExpenseRepository(),
+      debtRepository,
+      makeEvent({ status: "confirmed" }),
+    );
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).resolves.toMatchObject({ debt: { status: "settled" } });
+  });
+
+  it("rechaza cuando el evento no existe", async () => {
+    const debtRepository = createFakeDebtRepository([
+      makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500),
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository, null);
+
+    await expect(
+      service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+    expect(debtRepository.findById).not.toHaveBeenCalled();
   });
 });

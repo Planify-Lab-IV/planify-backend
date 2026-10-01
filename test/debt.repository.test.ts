@@ -5,13 +5,58 @@ import { prisma } from "../src/infrastructure/prisma.js";
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     simplifiedDebt: {
+      findUnique: vi.fn(),
       findMany: vi.fn(),
+      updateMany: vi.fn(),
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
     $transaction: vi.fn(),
   },
 }));
+
+describe("DebtRepository.findById", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("obtiene una deuda con deudor y acreedor", async () => {
+    const record = {
+      id: "debt-1",
+      eventId: "event-1",
+      amountCents: 1500,
+      status: "pending" as const,
+      settledAt: null,
+      createdAt: new Date("2026-09-20T00:00:00.000Z"),
+      debtor: { id: "participant-ana", username: "ana" },
+      creditor: { id: "participant-beto", username: "beto" },
+    };
+
+    vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce(record as never);
+
+    await expect(debtRepository.findById("debt-1")).resolves.toEqual(record);
+
+    expect(prisma.simplifiedDebt.findUnique).toHaveBeenCalledWith({
+      where: { id: "debt-1" },
+      select: {
+        id: true,
+        eventId: true,
+        amountCents: true,
+        status: true,
+        settledAt: true,
+        createdAt: true,
+        debtor: { select: { id: true, username: true } },
+        creditor: { select: { id: true, username: true } },
+      },
+    });
+  });
+
+  it("devuelve null si la deuda no existe", async () => {
+    vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce(null);
+
+    await expect(debtRepository.findById("debt-inexistente")).resolves.toBeNull();
+  });
+});
 
 describe("DebtRepository.findByEventId", () => {
   beforeEach(() => {
@@ -264,5 +309,29 @@ describe("DebtRepository.replacePendingForEvent", () => {
       })) as never);
 
     await expect(debtRepository.replacePendingForEvent(eventId, debts)).rejects.toThrow("DB error");
+  });
+});
+
+describe("DebtRepository.markSettled", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("actualiza solo una deuda pendiente y devuelve la cantidad de filas afectadas", async () => {
+    const settledAt = new Date("2026-09-30T12:00:00.000Z");
+    vi.mocked(prisma.simplifiedDebt.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    await expect(debtRepository.markSettled("debt-1", settledAt)).resolves.toBe(1);
+
+    expect(prisma.simplifiedDebt.updateMany).toHaveBeenCalledWith({
+      where: { id: "debt-1", status: "pending" },
+      data: { status: "settled", settledAt },
+    });
+  });
+
+  it("devuelve cero si ninguna deuda pendiente coincide", async () => {
+    vi.mocked(prisma.simplifiedDebt.updateMany).mockResolvedValueOnce({ count: 0 } as never);
+
+    await expect(debtRepository.markSettled("debt-1", new Date())).resolves.toBe(0);
   });
 });

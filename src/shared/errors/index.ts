@@ -70,3 +70,10 @@ export class PendingDebtsError extends AppError {
     this.name = "PendingDebtsError";
   }
 }
+
+export class DebtAlreadySettledError extends AppError {
+  constructor() {
+    super("La deuda ya fue saldada", 409, "DEBT_ALREADY_SETTLED");
+    this.name = "DebtAlreadySettledError";
+  }
+}

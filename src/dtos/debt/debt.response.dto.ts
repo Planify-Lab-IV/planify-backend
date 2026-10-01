@@ -20,6 +20,11 @@ export interface EventDebtsResponseDTO {
   allSettled: boolean;
 }
 
+export interface DebtSettlementResponseDTO {
+  debt: EventDebtResponseDTO;
+  allEventDebtsSettled: boolean;
+}
+
 function toEventDebtParticipantResponseDTO(
   participant: SimplifiedDebtRecord["debtor"],
 ): EventDebtParticipantResponseDTO {
@@ -48,5 +53,15 @@ export function toEventDebtsResponseDTO(
   return {
     debts: debts.map(toEventDebtResponseDTO),
     allSettled,
+  };
+}
+
+export function toDebtSettlementResponseDTO(
+  debt: SimplifiedDebtRecord,
+  allEventDebtsSettled: boolean,
+): DebtSettlementResponseDTO {
+  return {
+    debt: toEventDebtResponseDTO(debt),
+    allEventDebtsSettled,
   };
 }
