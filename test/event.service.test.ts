@@ -100,6 +100,10 @@ const unusedDebtRepository: DebtRepository = {
   findByEventId: vi.fn(async () => []),
   findSettledByEventId: vi.fn(),
   findByUserId: vi.fn(),
+  findPendingBetween: vi.fn(),
+  markManySettled: vi.fn(),
+  findPendingEventIds: vi.fn(),
+  withinTransaction: vi.fn(),
   replacePendingForEvent: vi.fn(),
 };
 

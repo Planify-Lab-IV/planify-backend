@@ -1,5 +1,7 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../infrastructure/prisma.js";
 import type { SimplifiedDebt } from "../services/debt-simplification.service.js";
+import type { ParsedPersonKey } from "../types/balance.js";
 
 export type DebtStatus = "pending" | "settled";
 
@@ -39,6 +41,18 @@ export interface DebtForUserRecord {
   eventName: string;
 }
 
+export interface PendingDebtReference {
+  id: string;
+  eventId: string;
+}
+
+export interface DebtSettlementTransaction {
+  // Estas operaciones solo se exponen dentro de la transacción del saldado en cascada.
+  findPendingBetween(userId: string, counterpart: ParsedPersonKey): Promise<PendingDebtReference[]>;
+  findPendingEventIds(eventIds: string[]): Promise<string[]>;
+  markManySettled(ids: string[], settledAt: Date): Promise<number>;
+}
+
 export interface DebtRepository {
   findById(debtId: string): Promise<SimplifiedDebtRecord | null>;
   findByEventId(eventId: string): Promise<SimplifiedDebtRecord[]>;
@@ -46,6 +60,65 @@ export interface DebtRepository {
   markSettled(debtId: string, settledAt: Date): Promise<number>;
   findByUserId(userId: string, statusOptions: FindByUserIdOptions): Promise<DebtForUserRecord[]>;
   replacePendingForEvent(eventId: string, debts: SimplifiedDebt[]): Promise<void>;
+  withinTransaction<T>(
+    operation: (transaction: DebtSettlementTransaction) => Promise<T>,
+  ): Promise<T>;
+}
+
+function toCounterpartFilter(counterpart: ParsedPersonKey) {
+  return counterpart.type === "user"
+    ? { userId: counterpart.userId }
+    : { id: counterpart.participantId, userId: null, isAnonymous: true };
+}
+
+// Recibe el cliente `tx` creado por Prisma, no el cliente global. Así cada consulta
+// participa de la misma transacción y un error revierte todos los cambios del saldado.
+function createDebtSettlementTransaction(
+  transactionClient: Prisma.TransactionClient,
+): DebtSettlementTransaction {
+  return {
+    async findPendingBetween(userId, counterpart) {
+      return transactionClient.simplifiedDebt.findMany({
+        where: {
+          status: "pending",
+          OR: [
+            { debtor: { userId }, creditor: toCounterpartFilter(counterpart) },
+            { debtor: toCounterpartFilter(counterpart), creditor: { userId } },
+          ],
+        },
+        select: { id: true, eventId: true },
+        orderBy: { id: "asc" },
+      });
+    },
+
+    async markManySettled(ids, settledAt) {
+      if (ids.length === 0) {
+        return 0;
+      }
+
+      const { count } = await transactionClient.simplifiedDebt.updateMany({
+        where: { id: { in: ids }, status: "pending" },
+        data: { status: "settled", settledAt },
+      });
+
+      return count;
+    },
+
+    async findPendingEventIds(eventIds) {
+      if (eventIds.length === 0) {
+        return [];
+      }
+
+      const debts = await transactionClient.simplifiedDebt.findMany({
+        where: { eventId: { in: eventIds }, status: "pending" },
+        select: { eventId: true },
+        distinct: ["eventId"],
+        orderBy: { eventId: "asc" },
+      });
+
+      return debts.map((debt) => debt.eventId);
+    },
+  };
 }
 
 export const debtRepository: DebtRepository = {
@@ -179,5 +252,12 @@ export const debtRepository: DebtRepository = {
         });
       }
     });
+  },
+
+  async withinTransaction(operation) {
+    // Prisma abre la transacción y entrega `tx`, un cliente asociado a ella. Las
+    // operaciones entregadas al callback usan ese mismo cliente, por lo que se
+    // confirman juntas o se revierten juntas si alguna falla.
+    return prisma.$transaction((tx) => operation(createDebtSettlementTransaction(tx)));
   },
 };
