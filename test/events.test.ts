@@ -18,6 +18,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       update: vi.fn(),
       updateMany: vi.fn(),
     },
+    simplifiedDebt: { findMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
   },
@@ -769,6 +770,7 @@ describe("PUT /events/:id/cancel", () => {
     const updateEvent = vi.fn().mockResolvedValue(cancelledEvent);
     const invalidateSessions = vi.fn().mockResolvedValue({ count: 1 });
     vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([] as never);
     vi.mocked(prisma.$transaction).mockImplementationOnce((async (
       callback: (tx: unknown) => unknown,
     ) =>
@@ -791,6 +793,24 @@ describe("PUT /events/:id/cancel", () => {
       where: { eventId: event.id, isAnonymous: true },
       data: { pinHash: null },
     });
+  });
+
+  it("devuelve 409 si el evento tiene deudas pendientes", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([
+      { status: "pending" },
+    ] as never);
+
+    const response = await request(app)
+      .put(`/events/${event.id}/cancel`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "PENDING_DEBTS",
+      message: "No se puede cancelar un evento con deudas pendientes",
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 
   it("devuelve 403 si quien llama no es el participante organizador", async () => {

@@ -9,7 +9,11 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     event: { findUnique: vi.fn() },
     eventParticipant: { findUnique: vi.fn() },
-    simplifiedDebt: { findMany: vi.fn() },
+    simplifiedDebt: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      updateMany: vi.fn(),
+    },
   },
 }));
 
@@ -193,5 +197,211 @@ describe("GET /events/:eventId/debts", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ debts: [], allSettled: false });
+  });
+});
+
+describe("POST /events/:eventId/debts/:debtId/settle", () => {
+  const eventId = "event-1";
+  const debtId = "debt-1";
+  const tokenService = createSessionTokenService(env.JWT_SECRET);
+  const participants = [
+    {
+      id: "participant-ana",
+      eventId,
+      userId: "user-ana",
+      username: "ana",
+      isAnonymous: false,
+      isOrganizer: true,
+    },
+    {
+      id: "participant-beto",
+      eventId,
+      userId: "user-beto",
+      username: "beto",
+      isAnonymous: false,
+      isOrganizer: false,
+    },
+    {
+      id: "participant-anonymous",
+      eventId,
+      userId: null,
+      username: "invitado",
+      isAnonymous: true,
+      isOrganizer: false,
+    },
+  ];
+  const event = {
+    id: eventId,
+    groupId: "group-1",
+    organizerId: "user-ana",
+    name: "Asado",
+    location: "Casa de Ana",
+    status: "active",
+    startDateTime: null,
+    createdAt: new Date("2026-09-20T00:00:00.000Z"),
+    updatedAt: new Date("2026-09-20T00:00:00.000Z"),
+    participants,
+  };
+  const pendingDebt = {
+    id: debtId,
+    eventId,
+    amountCents: 1500,
+    status: "pending" as const,
+    settledAt: null,
+    createdAt: new Date("2026-09-20T00:00:00.000Z"),
+    debtor: { id: "participant-ana", username: "ana" },
+    creditor: { id: "participant-beto", username: "beto" },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function mockSuccessfulSettlement(
+    debt = pendingDebt,
+    allDebts = [
+      {
+        ...pendingDebt,
+        status: "settled" as const,
+        settledAt: new Date("2026-09-30T12:00:00.000Z"),
+      },
+    ],
+  ) {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce(debt as never);
+    vi.mocked(prisma.simplifiedDebt.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce(allDebts as never);
+  }
+
+  it("saldar una deuda pendiente devuelve la deuda pública y que era la última", async () => {
+    mockSuccessfulSettlement();
+
+    const response = await request(app)
+      .post(`/events/${eventId}/debts/${debtId}/settle`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-ana")}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      debt: {
+        id: debtId,
+        eventId,
+        debtor: { participantId: "participant-ana", username: "ana" },
+        creditor: { participantId: "participant-beto", username: "beto" },
+        amountCents: 1500,
+        status: "settled",
+      },
+      allEventDebtsSettled: true,
+    });
+    expect(response.body.debt.settledAt).toEqual(expect.any(String));
+    expect(response.body.debt.createdAt).toBeUndefined();
+  });
+
+  it("informa false cuando quedan otras deudas pendientes", async () => {
+    mockSuccessfulSettlement(pendingDebt, [
+      { ...pendingDebt, status: "settled" as const, settledAt: new Date() },
+      { ...pendingDebt, id: "debt-2" },
+    ]);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/debts/${debtId}/settle`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-ana")}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.allEventDebtsSettled).toBe(false);
+  });
+
+  it("devuelve 409 si la deuda ya está saldada", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce({
+      ...pendingDebt,
+      status: "settled",
+      settledAt: new Date(),
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/debts/${debtId}/settle`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-ana")}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("DEBT_ALREADY_SETTLED");
+  });
+
+  it("prohíbe a un tercero aunque participe del evento", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce({
+      ...pendingDebt,
+      debtor: { id: "participant-beto", username: "beto" },
+      creditor: { id: "participant-anonymous", username: "invitado" },
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/debts/${debtId}/settle`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-ana")}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+  });
+
+  it("oculta una deuda de otro evento", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce({
+      ...pendingDebt,
+      eventId: "event-2",
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/debts/${debtId}/settle`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-ana")}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+  });
+
+  it("rechaza eventos cancelados", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/debts/${debtId}/settle`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-ana")}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EVENT_UNAVAILABLE");
+  });
+
+  it("permite saldar con una sesión anónima que representa al deudor", async () => {
+    const anonymousDebt = {
+      ...pendingDebt,
+      debtor: { id: "participant-anonymous", username: "invitado" },
+    };
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(participants[2] as never);
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce(event as never)
+      .mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce(anonymousDebt as never);
+    vi.mocked(prisma.simplifiedDebt.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([
+      { ...anonymousDebt, status: "settled", settledAt: new Date() },
+    ] as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/debts/${debtId}/settle`)
+      .set(
+        "Authorization",
+        `Bearer ${tokenService.signParticipant("participant-anonymous", eventId)}`,
+      );
+
+    expect(response.status).toBe(200);
+    expect(response.body.debt.status).toBe("settled");
+  });
+
+  it("requiere autenticación", async () => {
+    const response = await request(app).post(`/events/${eventId}/debts/${debtId}/settle`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
   });
 });

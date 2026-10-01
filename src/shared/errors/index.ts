@@ -58,9 +58,23 @@ export class InvitationUnavailableError extends NotFoundError {
 }
 
 export class EventUnavailableError extends AppError {
-  constructor() {
-    super("El evento no está disponible", 409, "EVENT_UNAVAILABLE");
+  constructor(message = "El evento no está disponible") {
+    super(message, 409, "EVENT_UNAVAILABLE");
     this.name = "EventUnavailableError";
+  }
+}
+
+export class PendingDebtsError extends AppError {
+  constructor() {
+    super("No se puede cancelar un evento con deudas pendientes", 409, "PENDING_DEBTS");
+    this.name = "PendingDebtsError";
+  }
+}
+
+export class DebtAlreadySettledError extends AppError {
+  constructor() {
+    super("La deuda ya fue saldada", 409, "DEBT_ALREADY_SETTLED");
+    this.name = "DebtAlreadySettledError";
   }
 }
 

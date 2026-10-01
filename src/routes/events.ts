@@ -43,6 +43,7 @@ const eventService = createEventService(
   groupRepository,
   userRepository,
   participantRepository,
+  debtRepository,
 );
 const eventController = createEventController(eventService);
 
@@ -103,6 +104,10 @@ router.post("/events/:eventId/expenses", requireAttendanceAuth, (req, res, next)
 
 router.get("/events/:eventId/debts", requireAttendanceAuth, (req, res, next) =>
   debtController.listEventDebts(req, res, next),
+);
+
+router.post("/events/:eventId/debts/:debtId/settle", requireAttendanceAuth, (req, res, next) =>
+  debtController.settle(req, res, next),
 );
 
 const invitationsService = createInvitationsService(eventRepository, invitationRepository);

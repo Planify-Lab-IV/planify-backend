@@ -11,6 +11,15 @@ export function getEventId(req: Request): string {
   return eventId;
 }
 
+export function getDebtId(req: Request): string {
+  const debtId = req.params.debtId;
+  if (typeof debtId !== "string" || debtId.trim() === "") {
+    throw new ValidationError("El debtId es requerido");
+  }
+
+  return debtId;
+}
+
 export function getAttendanceActor(req: Request): AttendanceActor {
   if (!req.attendanceActor) {
     throw new UnauthorizedError("Usuario no autenticado");
