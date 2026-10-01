@@ -1,4 +1,5 @@
 import type { Event, EventRepository } from "../repositories/event.repository.js";
+import type { DebtRepository } from "../repositories/debt.repository.js";
 import type { GroupRepository } from "../repositories/group.repository.js";
 import type { User, UserRepository } from "../repositories/user.repository.js";
 import type {
@@ -10,6 +11,7 @@ import {
   EventUnavailableError,
   ForbiddenError,
   NotFoundError,
+  PendingDebtsError,
   ValidationError,
 } from "../shared/errors/index.js";
 import type { CreateEventDTO } from "../validators/event/event.validator.js";
@@ -31,6 +33,7 @@ export function createEventService(
   groupRepository: GroupRepository,
   userRepository: UserRepository,
   participantRepository: ParticipantRepository,
+  debtRepository: DebtRepository,
 ): EventService {
   return {
     async getById(eventId: string, actor: AttendanceActor): Promise<Event> {
@@ -155,6 +158,11 @@ export function createEventService(
 
       if (event.status === "cancelled") {
         return event;
+      }
+
+      const debts = await debtRepository.findByEventId(eventId);
+      if (debts.some((debt) => debt.status === "pending")) {
+        throw new PendingDebtsError();
       }
 
       return eventRepository.cancelAtomic(eventId);

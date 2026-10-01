@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { type Event, type EventRepository } from "../src/repositories/event.repository.js";
+import type { DebtRepository } from "../src/repositories/debt.repository.js";
 import type { GroupRepository } from "../src/repositories/group.repository.js";
 import type {
   AttendanceParticipant,
@@ -11,6 +12,7 @@ import {
   EventUnavailableError,
   ForbiddenError,
   NotFoundError,
+  PendingDebtsError,
   ValidationError,
 } from "../src/shared/errors/index.js";
 
@@ -94,6 +96,13 @@ const unusedParticipantRepository: ParticipantRepository = {
   invalidateAnonymousSessions: vi.fn(),
 };
 
+const unusedDebtRepository: DebtRepository = {
+  findByEventId: vi.fn(async () => []),
+  findSettledByEventId: vi.fn(),
+  findByUserId: vi.fn(),
+  replacePendingForEvent: vi.fn(),
+};
+
 describe("EventService.getById", () => {
   function makeService(event: Event | null = makeEvent()) {
     const eventRepository = createInMemoryEventRepository(event ? [event] : []);
@@ -102,6 +111,7 @@ describe("EventService.getById", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
     );
 
     return { service, eventRepository };
@@ -220,6 +230,7 @@ describe("EventService.cancel", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
     );
 
     await expect(service.cancel("user-organizer", "event-1")).resolves.toMatchObject({
@@ -230,6 +241,67 @@ describe("EventService.cancel", () => {
     expect(eventRepository.cancelAtomic).toHaveBeenCalledWith("event-1");
   });
 
+  it("bloquea la cancelación cuando el evento tiene deudas pendientes", async () => {
+    const eventRepository = createInMemoryEventRepository([makeEvent()]);
+    const debtRepository: DebtRepository = {
+      ...unusedDebtRepository,
+      findByEventId: vi.fn(async () => [
+        {
+          id: "debt-1",
+          eventId: "event-1",
+          debtorParticipantId: "participant-debtor",
+          creditorParticipantId: "participant-creditor",
+          amountCents: 1000,
+          status: "pending",
+          settledAt: null,
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+        },
+      ]),
+    };
+    const service = createEventService(
+      eventRepository,
+      unusedGroupRepository,
+      unusedUserRepository,
+      unusedParticipantRepository,
+      debtRepository,
+    );
+
+    await expect(service.cancel("user-organizer", "event-1")).rejects.toBeInstanceOf(
+      PendingDebtsError,
+    );
+    expect(eventRepository.cancelAtomic).not.toHaveBeenCalled();
+  });
+
+  it("permite cancelar un evento cuando todas sus deudas están settled", async () => {
+    const eventRepository = createInMemoryEventRepository([makeEvent()]);
+    const debtRepository: DebtRepository = {
+      ...unusedDebtRepository,
+      findByEventId: vi.fn(async () => [
+        {
+          id: "debt-1",
+          eventId: "event-1",
+          debtorParticipantId: "participant-debtor",
+          creditorParticipantId: "participant-creditor",
+          amountCents: 1000,
+          status: "settled",
+          settledAt: new Date("2026-01-01T00:00:00Z"),
+          createdAt: new Date("2026-01-01T00:00:00Z"),
+        },
+      ]),
+    };
+    const service = createEventService(
+      eventRepository,
+      unusedGroupRepository,
+      unusedUserRepository,
+      unusedParticipantRepository,
+      debtRepository,
+    );
+
+    await expect(service.cancel("user-organizer", "event-1")).resolves.toMatchObject({
+      status: "cancelled",
+    });
+  });
+
   it("devuelve 404 si el evento no existe", async () => {
     const eventRepository = createInMemoryEventRepository([]);
     const service = createEventService(
@@ -237,6 +309,7 @@ describe("EventService.cancel", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
     );
 
     await expect(service.cancel("user-organizer", "event-unknown")).rejects.toBeInstanceOf(
@@ -265,6 +338,7 @@ describe("EventService.cancel", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
     );
 
     await expect(service.cancel("user-member", "event-1")).rejects.toBeInstanceOf(ForbiddenError);
@@ -279,6 +353,7 @@ describe("EventService.cancel", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
     );
 
     await expect(service.cancel("user-organizer", "event-1")).resolves.toBe(cancelledEvent);
@@ -294,6 +369,7 @@ describe("EventService.confirmSchedule", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
     );
 
     return { service, eventRepository };
@@ -435,6 +511,7 @@ describe("EventService.answerAttendance", () => {
       unusedGroupRepository,
       unusedUserRepository,
       participantRepository,
+      unusedDebtRepository,
     );
 
     return { service, participantRepository };
