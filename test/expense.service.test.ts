@@ -13,6 +13,7 @@ import type {
 import type { DebtService } from "../src/services/debt.service.js";
 import { createExpenseService } from "../src/services/expense.service.js";
 import {
+  ExpensesClosedError,
   EventUnavailableError,
   ForbiddenError,
   NotFoundError,
@@ -259,6 +260,23 @@ describe("ExpenseService.createExpense", () => {
 
     expect(participantRepository.findByEventId).not.toHaveBeenCalled();
     expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
+  });
+
+  it("rechaza gastos para un evento con gastos cerrados", async () => {
+    const { service, expenseRepository, participantRepository, debtService } = makeService(
+      undefined,
+      undefined,
+      makeEvent({ expensesClosed: true }),
+    );
+
+    await expect(
+      service.createExpense(eventId, { type: "user", userId: "user-1" }, makeDto()),
+    ).rejects.toBeInstanceOf(ExpensesClosedError);
+
+    expect(participantRepository.findAttendanceByEventIdAndUserId).not.toHaveBeenCalled();
+    expect(participantRepository.findByEventId).not.toHaveBeenCalled();
+    expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
+    expect(debtService.recalculateForEvent).not.toHaveBeenCalled();
   });
 
   it.each([

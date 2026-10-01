@@ -63,3 +63,10 @@ export class EventUnavailableError extends AppError {
     this.name = "EventUnavailableError";
   }
 }
+
+export class ExpensesClosedError extends AppError {
+  constructor() {
+    super("Los gastos del evento están cerrados", 409, "EXPENSES_CLOSED");
+    this.name = "ExpensesClosedError";
+  }
+}

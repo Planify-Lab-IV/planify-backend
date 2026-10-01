@@ -9,6 +9,7 @@ import type { ParticipantRepository } from "../repositories/participant.reposito
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import type { DebtService } from "./debt.service.js";
 import {
+  ExpensesClosedError,
   EventUnavailableError,
   ForbiddenError,
   NotFoundError,
@@ -46,6 +47,9 @@ export function createExpenseService(
       }
       if (event.status === "cancelled") {
         throw new EventUnavailableError();
+      }
+      if (event.expensesClosed) {
+        throw new ExpensesClosedError();
       }
 
       if (hasRepeatedParticipantIds(dto.payers)) {

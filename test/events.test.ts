@@ -442,6 +442,126 @@ describe("EventRepository.closeExpenses", () => {
   });
 });
 
+describe("POST /events/:eventId/expenses/close", () => {
+  const eventId = "event-close-1";
+  const organizerId = "user-organizer";
+  const tokenService = createSessionTokenService(env.JWT_SECRET);
+  const organizerToken = tokenService.sign(organizerId);
+  const event = {
+    id: eventId,
+    name: "Birthday",
+    location: "Ana's house",
+    groupId: "group-1",
+    organizerId,
+    status: "active",
+    expensesClosed: false,
+    startDateTime: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
+    participants: [],
+  };
+
+  beforeEach(() => vi.clearAllMocks());
+
+  it("permite al organizador cerrar gastos y devuelve el evento actualizado", async () => {
+    const closedEvent = { ...event, expensesClosed: true };
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+    vi.mocked(prisma.event.update).mockResolvedValueOnce(closedEvent as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: eventId,
+      expensesClosed: true,
+    });
+    expect(prisma.event.update).toHaveBeenCalledWith({
+      where: { id: eventId },
+      data: { expensesClosed: true },
+      include: { participants: true },
+    });
+  });
+
+  it("requiere autenticación de usuario", async () => {
+    const response = await request(app).post(`/events/${eventId}/expenses/close`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("rechaza el token de participante anónimo", async () => {
+    const anonymousToken = tokenService.signParticipant("participant-anonymous", eventId);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${anonymousToken}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.event.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si quien cierra no es el organizador", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${tokenService.sign("user-member")}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("rechaza el cierre de gastos de un evento cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      status: "cancelled",
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EVENT_UNAVAILABLE");
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+
+  it("es idempotente cuando los gastos ya están cerrados", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      ...event,
+      expensesClosed: true,
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${organizerToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      id: eventId,
+      expensesClosed: true,
+    });
+    expect(prisma.event.update).not.toHaveBeenCalled();
+  });
+});
+
 describe("EventRepository.confirmSchedule", () => {
   beforeEach(() => vi.clearAllMocks());
 
