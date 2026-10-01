@@ -56,6 +56,10 @@ router.put("/events/:eventId/cancel", requireAuth, (req, res, next) =>
   eventController.cancel(req, res, next),
 );
 
+router.post("/events/:eventId/expenses/close", requireAuth, (req, res, next) =>
+  eventController.closeExpenses(req, res, next),
+);
+
 router.patch("/events/:eventId/confirm-schedule", requireAuth, (req, res, next) =>
   eventController.confirmSchedule(req, res, next),
 );
