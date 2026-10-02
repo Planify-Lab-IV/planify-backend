@@ -3,12 +3,15 @@ import type { Expense, ExpenseRepository } from "../src/repositories/expense.rep
 import type {
   DebtForUserRecord,
   DebtRepository,
+  DebtSettlementTransaction,
+  PendingDebtReference,
   SimplifiedDebtRecord,
 } from "../src/repositories/debt.repository.js";
 import type { SimplifiedDebt } from "../src/services/debt-simplification.service.js";
 import {
   buildParticipantAmounts,
   isPersonKey,
+  parsePersonKey,
   toPersonKey,
   createDebtService as createDebtServiceImplementation,
 } from "../src/services/debt.service.js";
@@ -106,6 +109,10 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
       records[debtIndex] = { ...debt, status: "settled", settledAt };
       return 1;
     }),
+    findPendingBetween: vi.fn(async () => []),
+    markManySettled: vi.fn(async () => 0),
+    findPendingEventIds: vi.fn(async () => []),
+    withinTransaction: vi.fn(),
     replacePendingForEvent: vi.fn(async (eventId, debts) => {
       records = records.filter((d) => !(d.eventId === eventId && d.status === "pending"));
       records.push(
@@ -209,6 +216,27 @@ function createDebtService(
   );
 }
 
+function mockSettlementTransaction(
+  debtRepository: DebtRepository,
+  pendingDebts: PendingDebtReference[],
+  eventIdsWithPendingDebts: string[] = [],
+) {
+  const findPendingBetween = vi.fn().mockResolvedValue(pendingDebts);
+  const markManySettled = vi.fn().mockResolvedValue(pendingDebts.length);
+  const findPendingEventIds = vi.fn().mockResolvedValue(eventIdsWithPendingDebts);
+  const transaction: DebtSettlementTransaction = {
+    findPendingBetween,
+    markManySettled,
+    findPendingEventIds,
+  };
+
+  vi.mocked(debtRepository.withinTransaction).mockImplementation(async (operation) =>
+    operation(transaction),
+  );
+
+  return { findPendingBetween, markManySettled, findPendingEventIds };
+}
+
 describe("personKey", () => {
   it("identifica a una contraparte registrada por su userId", () => {
     expect(toPersonKey({ participantId: "participant-marcos-asado", userId: "user-marcos" })).toBe(
@@ -229,10 +257,25 @@ describe("personKey", () => {
     },
   );
 
-  it.each(["user:", "participant:", "person:user-marcos", "user:user:marcos", ""])(
+  it("parsea una contraparte registrada", () => {
+    expect(parsePersonKey("user:user-marcos")).toEqual({
+      type: "user",
+      userId: "user-marcos",
+    });
+  });
+
+  it("parsea una contraparte anónima", () => {
+    expect(parsePersonKey("participant:participant-invitado")).toEqual({
+      type: "participant",
+      participantId: "participant-invitado",
+    });
+  });
+
+  it.each(["user:", "participant:", "person:user-marcos", "user:user:marcos", "user: ", ""])(
     "rechaza la clave inválida %s",
     (personKey) => {
       expect(isPersonKey(personKey)).toBe(false);
+      expect(parsePersonKey(personKey)).toBeNull();
     },
   );
 });
@@ -887,6 +930,159 @@ describe("DebtService.getPersonDetail", () => {
     await expect(service.getPersonDetail(userId, "user:user-inexistente")).rejects.toBeInstanceOf(
       NotFoundError,
     );
+  });
+});
+
+describe("DebtService.settleWithPerson", () => {
+  const userId = "user-ana";
+  const marcosId = "user-marcos";
+
+  function makeMarcosDebts() {
+    return [
+      makeDebtForUser({
+        eventId: "event-asado",
+        debtor: {
+          participantId: "participant-ana-asado",
+          userId,
+          participantUsername: "ana",
+          userName: "Ana",
+        },
+        creditor: {
+          participantId: "participant-marcos-asado",
+          userId: marcosId,
+          participantUsername: "marcos",
+          userName: "Marcos",
+        },
+      }),
+      makeDebtForUser({
+        eventId: "event-cine",
+        debtor: {
+          participantId: "participant-marcos-cine",
+          userId: marcosId,
+          participantUsername: "marcos",
+          userName: "Marcos",
+        },
+        creditor: {
+          participantId: "participant-ana-cine",
+          userId,
+          participantUsername: "ana",
+          userName: "Ana",
+        },
+      }),
+    ];
+  }
+
+  it("salda las deudas pendientes en ambos sentidos y no incluye a terceros", async () => {
+    const debtRepository = createFakeDebtRepository();
+    vi.mocked(debtRepository.findByUserId).mockResolvedValue(makeMarcosDebts());
+    const transaction = mockSettlementTransaction(
+      debtRepository,
+      [
+        { id: "debt-asado", eventId: "event-asado" },
+        { id: "debt-cine", eventId: "event-cine" },
+      ],
+      ["event-cine"],
+    );
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(service.settleWithPerson(userId, `user:${marcosId}`)).resolves.toEqual({
+      settledCount: 2,
+      events: [
+        { eventId: "event-asado", allDebtsSettled: true },
+        { eventId: "event-cine", allDebtsSettled: false },
+      ],
+    });
+
+    expect(transaction.findPendingBetween).toHaveBeenCalledWith(userId, {
+      type: "user",
+      userId: marcosId,
+    });
+    expect(transaction.markManySettled).toHaveBeenCalledWith(
+      ["debt-asado", "debt-cine"],
+      expect.any(Date),
+    );
+    expect(transaction.markManySettled).toHaveBeenCalledOnce();
+    expect(transaction.findPendingEventIds).toHaveBeenCalledWith(["event-asado", "event-cine"]);
+  });
+
+  it("salda una contraparte anónima solo en su evento", async () => {
+    const debtRepository = createFakeDebtRepository();
+    vi.mocked(debtRepository.findByUserId).mockResolvedValue([
+      makeDebtForUser({
+        eventId: "event-asado",
+        debtor: {
+          participantId: "participant-ana-asado",
+          userId,
+          participantUsername: "ana",
+          userName: "Ana",
+        },
+        creditor: {
+          participantId: "participant-invitado-asado",
+          userId: null,
+          participantUsername: "invitado",
+          userName: null,
+        },
+      }),
+    ]);
+    const transaction = mockSettlementTransaction(debtRepository, [
+      { id: "debt-invitado", eventId: "event-asado" },
+    ]);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(
+      service.settleWithPerson(userId, "participant:participant-invitado-asado"),
+    ).resolves.toEqual({
+      settledCount: 1,
+      events: [{ eventId: "event-asado", allDebtsSettled: true }],
+    });
+
+    expect(transaction.findPendingBetween).toHaveBeenCalledWith(userId, {
+      type: "participant",
+      participantId: "participant-invitado-asado",
+    });
+  });
+
+  it("es idempotente cuando la relación existe pero ya no tiene pendientes", async () => {
+    const debtRepository = createFakeDebtRepository();
+    vi.mocked(debtRepository.findByUserId).mockResolvedValue(
+      makeMarcosDebts().map((debt) => ({ ...debt, status: "settled" as const })),
+    );
+    const transaction = mockSettlementTransaction(debtRepository, []);
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(service.settleWithPerson(userId, `user:${marcosId}`)).resolves.toEqual({
+      settledCount: 0,
+      events: [],
+    });
+
+    expect(transaction.markManySettled).not.toHaveBeenCalled();
+    expect(transaction.findPendingEventIds).not.toHaveBeenCalled();
+  });
+
+  it("rechaza una clave inválida o una contraparte propia antes de consultar deudas", async () => {
+    const debtRepository = createFakeDebtRepository();
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(service.settleWithPerson(userId, "marcos")).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+    await expect(service.settleWithPerson(userId, `user:${userId}`)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
+
+    expect(debtRepository.findByUserId).not.toHaveBeenCalled();
+    expect(debtRepository.withinTransaction).not.toHaveBeenCalled();
+  });
+
+  it("informa not found cuando no existe una relación con la persona", async () => {
+    const debtRepository = createFakeDebtRepository();
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    await expect(service.settleWithPerson(userId, `user:${marcosId}`)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+
+    expect(debtRepository.withinTransaction).not.toHaveBeenCalled();
   });
 });
 

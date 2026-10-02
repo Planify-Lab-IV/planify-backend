@@ -5,12 +5,14 @@ import type {
   DebtRepository,
   SimplifiedDebtRecord,
 } from "../repositories/debt.repository.js";
+import { parsePersonKey } from "../types/balance.js";
 import type {
   BalanceDirection,
   PersonBalance,
   PersonBalanceDetail,
   PersonBalanceStatus,
   PersonKey,
+  ParsedPersonKey,
   UserBalanceSummary,
 } from "../types/balance.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
@@ -23,6 +25,7 @@ import {
 } from "../shared/errors/index.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
 import type { Event, EventRepository } from "../repositories/event.repository.js";
+export { isPersonKey, parsePersonKey } from "../types/balance.js";
 
 export interface EventDebts {
   debts: SimplifiedDebtRecord[];
@@ -34,12 +37,23 @@ export interface DebtSettlement {
   allEventDebtsSettled: boolean;
 }
 
+export interface PersonDebtSettlementEvent {
+  eventId: string;
+  allDebtsSettled: boolean;
+}
+
+export interface PersonDebtSettlement {
+  settledCount: number;
+  events: PersonDebtSettlementEvent[];
+}
+
 export interface DebtService {
   recalculateForEvent(eventId: string): Promise<void>;
   listEventDebts(eventId: string, actor: AttendanceActor): Promise<EventDebts>;
   getBalanceSummary(userId: string): Promise<UserBalanceSummary>;
   getPeopleBalances(userId: string): Promise<PersonBalance[]>;
   getPersonDetail(userId: string, personKey: string): Promise<PersonBalanceDetail>;
+  settleWithPerson(userId: string, personKey: string): Promise<PersonDebtSettlement>;
   settleDebt(eventId: string, debtId: string, actor: AttendanceActor): Promise<DebtSettlement>;
 }
 
@@ -68,6 +82,32 @@ export function createDebtService(
 
     return participant.id;
   }
+
+  function parseRequiredPersonKey(personKey: string): ParsedPersonKey {
+    const parsedPersonKey = parsePersonKey(personKey);
+
+    if (!parsedPersonKey) {
+      throw new ValidationError("La clave de persona es inválida");
+    }
+
+    return parsedPersonKey;
+  }
+
+  async function findPersonDetail(userId: string, personKey: string): Promise<PersonBalanceDetail> {
+    const debts = await debtRepository.findByUserId(userId, {
+      statuses: ["pending", "settled"],
+    });
+    const detail = buildPersonBalanceDetails(userId, debts).find(
+      (balance) => balance.personKey === personKey,
+    );
+
+    if (!detail) {
+      throw new NotFoundError("No hay deudas con la persona solicitada");
+    }
+
+    return detail;
+  }
+
   return {
     async recalculateForEvent(eventId: string): Promise<void> {
       const [expenses, settledDebts] = await Promise.all([
@@ -172,22 +212,45 @@ export function createDebtService(
     },
 
     async getPersonDetail(userId: string, personKey: string): Promise<PersonBalanceDetail> {
-      if (!isPersonKey(personKey)) {
-        throw new ValidationError("La clave de persona es inválida");
+      parseRequiredPersonKey(personKey);
+
+      return findPersonDetail(userId, personKey);
+    },
+
+    async settleWithPerson(userId: string, personKey: string): Promise<PersonDebtSettlement> {
+      const counterpart = parseRequiredPersonKey(personKey);
+
+      if (counterpart.type === "user" && counterpart.userId === userId) {
+        throw new ValidationError("No podés saldar deudas con vos mismo");
       }
 
-      const debts = await debtRepository.findByUserId(userId, {
-        statuses: ["pending", "settled"],
+      await findPersonDetail(userId, personKey);
+
+      return debtRepository.withinTransaction(async (transaction) => {
+        const pendingDebts = await transaction.findPendingBetween(userId, counterpart);
+
+        if (pendingDebts.length === 0) {
+          return { settledCount: 0, events: [] };
+        }
+
+        const settledAt = new Date();
+        const settledCount = await transaction.markManySettled(
+          pendingDebts.map((debt) => debt.id),
+          settledAt,
+        );
+        const affectedEventIds = [...new Set(pendingDebts.map((debt) => debt.eventId))].sort();
+        const eventIdsWithPendingDebts = new Set(
+          await transaction.findPendingEventIds(affectedEventIds),
+        );
+
+        return {
+          settledCount,
+          events: affectedEventIds.map((eventId) => ({
+            eventId,
+            allDebtsSettled: !eventIdsWithPendingDebts.has(eventId),
+          })),
+        };
       });
-      const detail = buildPersonBalanceDetails(userId, debts).find(
-        (balance) => balance.personKey === personKey,
-      );
-
-      if (!detail) {
-        throw new NotFoundError("No hay deudas con la persona solicitada");
-      }
-
-      return detail;
     },
   };
 }
@@ -303,8 +366,4 @@ export function toPersonKey(participant: {
   return participant.userId
     ? `user:${participant.userId}`
     : `participant:${participant.participantId}`;
-}
-
-export function isPersonKey(value: string): value is PersonKey {
-  return /^(user|participant):[^:]+$/.test(value);
 }

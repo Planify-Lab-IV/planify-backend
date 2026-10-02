@@ -4,6 +4,7 @@ import type {
   PersonBalanceDetail,
   UserBalanceSummary,
 } from "../../types/balance.js";
+import type { PersonDebtSettlement } from "../../services/debt.service.js";
 
 export interface BalanceResponseDTO {
   owedToMeCents: number;
@@ -26,6 +27,16 @@ export interface PersonBalanceResponseDTO {
 
 export interface PersonBalanceDetailResponseDTO extends PersonBalanceResponseDTO {
   breakdown: EventBalanceLineResponseDTO[];
+}
+
+export interface PersonDebtSettlementEventResponseDTO {
+  eventId: string;
+  allDebtsSettled: boolean;
+}
+
+export interface PersonDebtSettlementResponseDTO {
+  settledCount: number;
+  events: PersonDebtSettlementEventResponseDTO[];
 }
 
 export function toBalanceResponseDTO(summary: UserBalanceSummary): BalanceResponseDTO {
@@ -59,5 +70,17 @@ export function toPersonBalanceDetailResponseDTO(
   return {
     ...toPersonBalanceResponseDTO(balance),
     breakdown: balance.breakdown.map(toEventBalanceLineResponseDTO),
+  };
+}
+
+export function toPersonDebtSettlementResponseDTO(
+  settlement: PersonDebtSettlement,
+): PersonDebtSettlementResponseDTO {
+  return {
+    settledCount: settlement.settledCount,
+    events: settlement.events.map((event) => ({
+      eventId: event.eventId,
+      allDebtsSettled: event.allDebtsSettled,
+    })),
   };
 }

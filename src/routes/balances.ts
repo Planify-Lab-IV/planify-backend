@@ -20,6 +20,10 @@ router.get("/me/balance/people", requireAuthenticatedUser, (req, res, next) =>
   balanceController.getPeople(req, res, next),
 );
 
+router.post("/me/balance/people/:personKey/settle", requireAuthenticatedUser, (req, res, next) =>
+  balanceController.settleWithPerson(req, res, next),
+);
+
 router.get("/me/balance/people/:personKey", requireAuthenticatedUser, (req, res, next) =>
   balanceController.getPersonDetail(req, res, next),
 );
