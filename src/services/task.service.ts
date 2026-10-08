@@ -4,6 +4,7 @@ import type {
   ParticipantRepository,
 } from "../repositories/participant.repository.js";
 import type { Task, TaskRepository } from "../repositories/task.repository.js";
+import type { ActivityLogService } from "./activity-log.service.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../shared/errors/index.js";
 import { validateEventId } from "../shared/event-id.js";
@@ -32,6 +33,7 @@ export function createTaskService(
   taskRepository: TaskRepository,
   eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
+  activityLogService: ActivityLogService,
 ): TaskService {
   async function ensureEventExists(eventId: string): Promise<void> {
     const event = await eventRepository.findById(eventId);
@@ -85,13 +87,22 @@ export function createTaskService(
       await ensureEventExists(eventId);
       const participant = await resolveParticipant(eventId, actor);
 
-      return taskRepository.create({
+      const task = await taskRepository.create({
         eventId,
         title: cleanTitle,
         status: "unassigned",
         assignedToParticipantId: null,
         createdByParticipantId: participant.id,
       });
+
+      await activityLogService.record({
+        eventId,
+        type: "task_created",
+        actorParticipantId: participant.id,
+        payload: { taskId: task.id, title: task.title },
+      });
+
+      return task;
     },
 
     async claim(taskId, actor) {

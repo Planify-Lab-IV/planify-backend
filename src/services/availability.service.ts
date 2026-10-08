@@ -8,6 +8,7 @@ import type {
   AttendanceParticipant,
   ParticipantRepository,
 } from "../repositories/participant.repository.js";
+import type { ActivityLogService } from "./activity-log.service.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../shared/errors/index.js";
 import { validateEventId } from "../shared/event-id.js";
@@ -59,6 +60,7 @@ export function createAvailabilityService(
   eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
   availabilityRepository: AvailabilityRepository,
+  activityLogService: ActivityLogService,
 ): AvailabilityService {
   async function resolveParticipant(
     eventId: string,
@@ -96,6 +98,12 @@ export function createAvailabilityService(
 
       const participant = await resolveParticipant(eventId, actor);
       await availabilityRepository.replaceForParticipant(eventId, participant.id, slots);
+      await activityLogService.record({
+        eventId,
+        type: "availability_updated",
+        actorParticipantId: participant.id,
+        payload: { slotCount: slots.length },
+      });
     },
 
     async load(eventId, actor) {
