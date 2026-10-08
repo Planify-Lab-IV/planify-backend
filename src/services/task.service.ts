@@ -6,6 +6,7 @@ import type {
 import type { Task, TaskRepository } from "../repositories/task.repository.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../shared/errors/index.js";
+import { validateEventId } from "../shared/event-id.js";
 
 export interface TaskService {
   list(eventId: string, actor: AttendanceActor): Promise<Task[]>;
@@ -13,12 +14,6 @@ export interface TaskService {
   claim(taskId: string, actor: AttendanceActor): Promise<Task>;
   assignTo(taskId: string, participantId: string, actor: AttendanceActor): Promise<Task>;
   complete(taskId: string, actor: AttendanceActor): Promise<Task>;
-}
-
-function validateEventId(eventId: string): void {
-  if (typeof eventId !== "string" || eventId.trim() === "") {
-    throw new ValidationError("El eventId es requerido");
-  }
 }
 
 function validateTitle(title: string): string {

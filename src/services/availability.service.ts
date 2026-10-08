@@ -10,6 +10,7 @@ import type {
 } from "../repositories/participant.repository.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../shared/errors/index.js";
+import { validateEventId } from "../shared/event-id.js";
 
 export interface AvailabilityHeatmap {
   totalParticipants: number;
@@ -20,12 +21,6 @@ export interface AvailabilityService {
   save(eventId: string, actor: AttendanceActor, slots: AvailabilitySlotInput[]): Promise<void>;
   load(eventId: string, actor: AttendanceActor): Promise<AvailabilitySlotInput[]>;
   heatmap(userId: string, eventId: string): Promise<AvailabilityHeatmap>;
-}
-
-function validateEventId(eventId: string): void {
-  if (typeof eventId !== "string" || eventId.trim() === "") {
-    throw new ValidationError("El eventId es requerido");
-  }
 }
 
 function validateSlots(slots: AvailabilitySlotInput[]): void {
