@@ -11,6 +11,7 @@ import type {
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
 import type { DebtService } from "../src/services/debt.service.js";
+import type { ActivityLogService } from "../src/services/activity-log.service.js";
 import { createExpenseService } from "../src/services/expense.service.js";
 import {
   EventUnavailableError,
@@ -100,7 +101,16 @@ function createExpenseRepository(): ExpenseRepository {
 function createDebtServiceMock(): DebtService {
   return {
     recalculateForEvent: vi.fn(async () => {}),
+    listEventDebts: vi.fn(),
+    getBalanceSummary: vi.fn(),
+    getPeopleBalances: vi.fn(),
+    getPersonDetail: vi.fn(),
+    settleDebt: vi.fn(),
   };
+}
+
+function createActivityLogServiceMock(): ActivityLogService {
+  return { record: vi.fn(async () => {}), list: vi.fn(async () => []) };
 }
 
 function createEventRepository(event: Event | null = makeEvent()): EventRepository {
@@ -138,6 +148,7 @@ function makeService(
   creator: AttendanceParticipant | null = makeAttendanceParticipant(),
   event: Event | null = makeEvent(),
   debtService: DebtService = createDebtServiceMock(),
+  activityLogService: ActivityLogService = createActivityLogServiceMock(),
 ) {
   const expenseRepository = createExpenseRepository();
   const eventRepository = createEventRepository(event);
@@ -147,14 +158,22 @@ function makeService(
     eventRepository,
     participantRepository,
     debtService,
+    activityLogService,
   );
 
-  return { service, expenseRepository, eventRepository, participantRepository, debtService };
+  return {
+    service,
+    expenseRepository,
+    eventRepository,
+    participantRepository,
+    debtService,
+    activityLogService,
+  };
 }
 
 describe("ExpenseService.createExpense", () => {
   it("crea un gasto con múltiples acreedores y deudores y dispara el recálculo", async () => {
-    const { service, expenseRepository, debtService } = makeService();
+    const { service, expenseRepository, debtService, activityLogService } = makeService();
     const dto = makeDto();
 
     await expect(
@@ -175,6 +194,16 @@ describe("ExpenseService.createExpense", () => {
       debtors: dto.debtors,
     });
     expect(debtService.recalculateForEvent).toHaveBeenCalledWith(eventId);
+    expect(activityLogService.record).toHaveBeenCalledWith({
+      eventId,
+      type: "expense_created",
+      actorParticipantId: "participant-creator",
+      payload: {
+        expenseId: "expense-1",
+        description: dto.description,
+        totalAmountCents: dto.totalAmountCents,
+      },
+    });
   });
 
   it("acepta al participante anónimo del mismo evento como creador", async () => {
@@ -230,7 +259,7 @@ describe("ExpenseService.createExpense", () => {
   });
 
   it("devuelve not found si el evento no existe", async () => {
-    const { service, expenseRepository, participantRepository } = makeService(
+    const { service, expenseRepository, participantRepository, activityLogService } = makeService(
       undefined,
       undefined,
       null,
@@ -242,6 +271,7 @@ describe("ExpenseService.createExpense", () => {
 
     expect(participantRepository.findByEventId).not.toHaveBeenCalled();
     expect(expenseRepository.createAtomic).not.toHaveBeenCalled();
+    expect(activityLogService.record).not.toHaveBeenCalled();
   });
 
   it("rechaza gastos para un evento cancelado", async () => {

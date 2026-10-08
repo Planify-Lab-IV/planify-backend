@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type {
+  AvailabilityHeatmapSlot,
   AvailabilityRepository,
   AvailabilitySlot,
   AvailabilitySlotInput,
@@ -13,6 +14,7 @@ import type {
   AttendanceParticipant,
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
+import type { ActivityLogService } from "../src/services/activity-log.service.js";
 import { createAvailabilityService } from "../src/services/availability.service.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../src/shared/errors/index.js";
 
@@ -24,6 +26,7 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
     name: "Cumpleaños",
     location: "Casa de Ana",
     status: "active",
+    startDateTime: null,
     createdAt: new Date("2026-01-01T00:00:00Z"),
     updatedAt: new Date("2026-01-01T00:00:00Z"),
     participants: [],
@@ -61,6 +64,7 @@ function createEventRepository(event: Event | null): EventRepository {
     findById: vi.fn(async () => event),
     createAtomic: vi.fn(),
     cancelAtomic: vi.fn(),
+    confirmSchedule: vi.fn(),
   };
 }
 
@@ -90,18 +94,26 @@ function createAvailabilityRepository(
   let records = [...initialSlots];
 
   return {
-    replaceForParticipant: vi.fn(async (eventId, participantId, slots) => {
-      records = records.filter(
-        (slot) => slot.eventId !== eventId || slot.participantId !== participantId,
-      );
-      records.push(...slots.map((slot) => ({ ...slot, eventId, participantId })));
-    }),
-    findForParticipant: vi.fn(async (eventId, participantId) => {
-      return records.filter(
-        (slot) => slot.eventId === eventId && slot.participantId === participantId,
-      );
-    }),
-    findHeatmapByEventId: vi.fn(async (eventId) => {
+    replaceForParticipant: vi.fn(
+      async (
+        eventId: string,
+        participantId: string,
+        slots: AvailabilitySlotInput[],
+      ): Promise<void> => {
+        records = records.filter(
+          (slot) => slot.eventId !== eventId || slot.participantId !== participantId,
+        );
+        records.push(...slots.map((slot) => ({ ...slot, eventId, participantId })));
+      },
+    ),
+    findForParticipant: vi.fn(
+      async (eventId: string, participantId: string): Promise<AvailabilitySlot[]> => {
+        return records.filter(
+          (slot) => slot.eventId === eventId && slot.participantId === participantId,
+        );
+      },
+    ),
+    findHeatmapByEventId: vi.fn(async (eventId: string): Promise<AvailabilityHeatmapSlot[]> => {
       const participantsBySlot = new Map<string, Set<string>>();
 
       for (const slot of records) {
@@ -115,12 +127,24 @@ function createAvailabilityRepository(
 
       return [...participantsBySlot.entries()]
         .map(([key, participantIds]) => {
-          const [weekDay, hourBlock] = key.split(":").map(Number);
-          return { weekDay, hourBlock, availableCount: participantIds.size };
+          const [weekDayValue, hourBlockValue] = key.split(":");
+          if (weekDayValue === undefined || hourBlockValue === undefined) {
+            throw new Error("Invalid availability slot key");
+          }
+
+          return {
+            weekDay: Number(weekDayValue),
+            hourBlock: Number(hourBlockValue),
+            availableCount: participantIds.size,
+          };
         })
         .sort((left, right) => left.weekDay - right.weekDay || left.hourBlock - right.hourBlock);
     }),
   };
+}
+
+function createActivityLogServiceMock(): ActivityLogService {
+  return { record: vi.fn(async () => {}), list: vi.fn(async () => []) };
 }
 
 function makeService(
@@ -130,18 +154,26 @@ function makeService(
 ) {
   const eventRepository = createEventRepository(event);
   const participantRepository = createParticipantRepository(participants);
+  const activityLogService = createActivityLogServiceMock();
   const service = createAvailabilityService(
     eventRepository,
     participantRepository,
     availabilityRepository,
+    activityLogService,
   );
 
-  return { service, eventRepository, participantRepository, availabilityRepository };
+  return {
+    service,
+    eventRepository,
+    participantRepository,
+    availabilityRepository,
+    activityLogService,
+  };
 }
 
 describe("AvailabilityService.save", () => {
   it("guarda los slots de un participante registrado", async () => {
-    const { service, availabilityRepository } = makeService();
+    const { service, availabilityRepository, activityLogService } = makeService();
     const slots: AvailabilitySlotInput[] = [{ weekDay: 0, hourBlock: 9 }];
 
     await expect(
@@ -153,6 +185,12 @@ describe("AvailabilityService.save", () => {
       "participant-1",
       slots,
     );
+    expect(activityLogService.record).toHaveBeenCalledWith({
+      eventId: "event-1",
+      type: "availability_updated",
+      actorParticipantId: "participant-1",
+      payload: { slotCount: 1 },
+    });
   });
 
   it("guarda los slots de un participante anónimo de su propio evento", async () => {
@@ -177,7 +215,7 @@ describe("AvailabilityService.save", () => {
   });
 
   it("rechaza slots inválidos sin consultar ni modificar persistencia", async () => {
-    const { service, eventRepository, availabilityRepository } = makeService();
+    const { service, eventRepository, availabilityRepository, activityLogService } = makeService();
 
     await expect(
       service.save("event-1", { type: "user", userId: "user-1" }, [{ weekDay: 7, hourBlock: 9 }]),
@@ -185,18 +223,23 @@ describe("AvailabilityService.save", () => {
 
     expect(eventRepository.findById).not.toHaveBeenCalled();
     expect(availabilityRepository.replaceForParticipant).not.toHaveBeenCalled();
+    expect(activityLogService.record).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [{ weekDay: -1, hourBlock: 9 }],
-    [{ weekDay: 0, hourBlock: 24 }],
-    [{ weekDay: 0.5, hourBlock: 9 }],
-    [{ weekDay: 0, hourBlock: 9.5 }],
-    [
-      { weekDay: 0, hourBlock: 9 },
-      { weekDay: 0, hourBlock: 9 },
-    ],
-  ])("rechaza una grilla inválida: %o", async (slots) => {
+  const invalidSlotCases: Array<{ slots: AvailabilitySlotInput[] }> = [
+    { slots: [{ weekDay: -1, hourBlock: 9 }] },
+    { slots: [{ weekDay: 0, hourBlock: 24 }] },
+    { slots: [{ weekDay: 0.5, hourBlock: 9 }] },
+    { slots: [{ weekDay: 0, hourBlock: 9.5 }] },
+    {
+      slots: [
+        { weekDay: 0, hourBlock: 9 },
+        { weekDay: 0, hourBlock: 9 },
+      ],
+    },
+  ];
+
+  it.each(invalidSlotCases)("rechaza una grilla inválida: %o", async ({ slots }) => {
     const { service, availabilityRepository } = makeService();
 
     await expect(

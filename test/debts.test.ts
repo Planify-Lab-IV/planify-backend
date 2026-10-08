@@ -4,6 +4,7 @@ import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
 import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 import { env } from "../src/shared/config/env.js";
+import type { SimplifiedDebtRecord } from "../src/repositories/debt.repository.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
@@ -242,7 +243,7 @@ describe("POST /events/:eventId/debts/:debtId/settle", () => {
     updatedAt: new Date("2026-09-20T00:00:00.000Z"),
     participants,
   };
-  const pendingDebt = {
+  const pendingDebt: SimplifiedDebtRecord = {
     id: debtId,
     eventId,
     amountCents: 1500,
@@ -259,7 +260,7 @@ describe("POST /events/:eventId/debts/:debtId/settle", () => {
 
   function mockSuccessfulSettlement(
     debt = pendingDebt,
-    allDebts = [
+    allDebts: SimplifiedDebtRecord[] = [
       {
         ...pendingDebt,
         status: "settled" as const,
