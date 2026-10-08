@@ -12,7 +12,7 @@ export interface EventParticipant {
 export const eventStatuses = ["active", "confirmed", "cancelled"] as const;
 export type EventStatus = (typeof eventStatuses)[number];
 
-function parseEventStatus(status: string): EventStatus {
+export function parseEventStatus(status: string): EventStatus {
   if ((eventStatuses as readonly string[]).includes(status)) {
     return status as EventStatus;
   }
