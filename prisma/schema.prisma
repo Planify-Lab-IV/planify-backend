@@ -63,6 +63,7 @@ model Event {
   expense         Expense[]
   simplifiedDebts SimplifiedDebt[]
   Task            Task[]
+  activityLogs    ActivityLog[]
 
   @@map("evento")
 }
@@ -100,6 +101,7 @@ model EventParticipant {
   debtsAsCreditor   SimplifiedDebt[]   @relation("DebtCreditor")
   assignedTasks     Task[]             @relation("TaskAssignee")
   createdTasks      Task[]             @relation("TaskCreator")
+  activityLogs      ActivityLog[]      @relation("ActivityLogActor")
 
   @@unique([id, eventId])
   @@unique([eventId, username])
@@ -221,4 +223,26 @@ model Task {
 
   @@index([eventId])
   @@map("tarea")
+}
+
+enum ActivityType {
+  task_created
+  availability_updated
+  expense_created
+  schedule_confirmed
+}
+
+model ActivityLog {
+  id                 String       @id @default(uuid())
+  eventId            String       @map("evento_id")
+  type               ActivityType @map("tipo")
+  actorParticipantId String       @map("actor_participante_id")
+  payload            Json?
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  event Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  actor EventParticipant @relation("ActivityLogActor", fields: [actorParticipantId, eventId], references: [id, eventId])
+
+  @@index([eventId, createdAt])
+  @@map("log_actividad")
 }
