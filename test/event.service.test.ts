@@ -75,6 +75,7 @@ const unusedGroupRepository: GroupRepository = {
   isMember: vi.fn(),
   create: vi.fn(),
   findByUserId: vi.fn(),
+  findOverviewByUserId: vi.fn(),
 };
 
 const unusedUserRepository: UserRepository = {
