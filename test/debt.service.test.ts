@@ -1057,6 +1057,65 @@ describe("DebtService.settleWithPerson", () => {
     expect(transaction.findPendingEventIds).not.toHaveBeenCalled();
   });
 
+  it("devuelve vacío a la segunda solicitud concurrente que no actualiza deudas", async () => {
+    const debtRepository = createFakeDebtRepository();
+    vi.mocked(debtRepository.findByUserId).mockResolvedValue(makeMarcosDebts());
+    const pendingDebts = [
+      { id: "debt-asado", eventId: "event-asado" },
+      { id: "debt-cine", eventId: "event-cine" },
+    ];
+    let reads = 0;
+    let releaseReads: () => void = () => undefined;
+    const bothCallsRead = new Promise<void>((resolve) => {
+      releaseReads = resolve;
+    });
+    let debtsWereSettled = false;
+    const findPendingBetween = vi.fn(async () => {
+      reads += 1;
+
+      if (reads === 2) {
+        releaseReads();
+      }
+
+      await bothCallsRead;
+      return pendingDebts;
+    });
+    const markManySettled = vi.fn(async () => {
+      if (debtsWereSettled) {
+        return 0;
+      }
+
+      debtsWereSettled = true;
+      return pendingDebts.length;
+    });
+    const findPendingEventIds = vi.fn(async () => []);
+    const transaction: DebtSettlementTransaction = {
+      findPendingBetween,
+      markManySettled,
+      findPendingEventIds,
+    };
+    vi.mocked(debtRepository.withinTransaction).mockImplementation(async (operation) =>
+      operation(transaction),
+    );
+    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+
+    const results = await Promise.all([
+      service.settleWithPerson(userId, `user:${marcosId}`),
+      service.settleWithPerson(userId, `user:${marcosId}`),
+    ]);
+
+    expect(results).toContainEqual({
+      settledCount: 2,
+      events: [
+        { eventId: "event-asado", allDebtsSettled: true },
+        { eventId: "event-cine", allDebtsSettled: true },
+      ],
+    });
+    expect(results).toContainEqual({ settledCount: 0, events: [] });
+    expect(markManySettled).toHaveBeenCalledTimes(2);
+    expect(findPendingEventIds).toHaveBeenCalledOnce();
+  });
+
   it("rechaza una clave inválida o una contraparte propia antes de consultar deudas", async () => {
     const debtRepository = createFakeDebtRepository();
     const service = createDebtService(createFakeExpenseRepository(), debtRepository);

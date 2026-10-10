@@ -238,6 +238,11 @@ export function createDebtService(
           pendingDebts.map((debt) => debt.id),
           settledAt,
         );
+
+        if (settledCount === 0) {
+          return { settledCount: 0, events: [] };
+        }
+
         const affectedEventIds = [...new Set(pendingDebts.map((debt) => debt.eventId))].sort();
         const eventIdsWithPendingDebts = new Set(
           await transaction.findPendingEventIds(affectedEventIds),
