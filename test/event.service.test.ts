@@ -393,6 +393,8 @@ describe("EventService.closeExpenses", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     return { service, eventRepository };
