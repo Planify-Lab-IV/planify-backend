@@ -1,6 +1,7 @@
 // Capa de acceso a datos para la entidad Grupo y sus relaciones de membresía.
 
 import { prisma } from "../infrastructure/prisma.js";
+import { parseEventStatus, type EventStatus } from "./event.repository.js";
 
 export interface Group {
   id: string;
@@ -32,11 +33,24 @@ export interface GroupSummary {
   memberCount: number;
 }
 
+export interface GroupOverviewEvent {
+  id: string;
+  name: string;
+  status: EventStatus;
+  startDateTime: Date | null;
+  location: string;
+}
+
+export interface GroupOverview extends GroupSummary {
+  events: GroupOverviewEvent[];
+}
+
 export interface GroupRepository {
   findById(id: string): Promise<GroupWithMembers | null>;
   isMember(groupId: string, userId: string): Promise<boolean>;
   create(data: { name: string }): Promise<Group>;
   findByUserId(userId: string): Promise<GroupSummary[]>;
+  findOverviewByUserId(userId: string): Promise<GroupOverview[]>;
 }
 
 export const groupRepository: GroupRepository = {
@@ -116,6 +130,51 @@ export const groupRepository: GroupRepository = {
       id: group.id,
       name: group.name,
       memberCount: group._count.members,
+    }));
+  },
+
+  async findOverviewByUserId(userId: string): Promise<GroupOverview[]> {
+    const groups = await prisma.group.findMany({
+      where: {
+        members: {
+          some: { userId },
+        },
+      },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            members: true,
+          },
+        },
+        events: {
+          where: {
+            status: {
+              in: ["active", "confirmed"],
+            },
+          },
+          orderBy: [{ startDateTime: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            startDateTime: true,
+            location: true,
+          },
+        },
+      },
+    });
+
+    return groups.map((group) => ({
+      id: group.id,
+      name: group.name,
+      memberCount: group._count.members,
+      events: group.events.map((event) => ({
+        ...event,
+        status: parseEventStatus(event.status),
+      })),
     }));
   },
 };

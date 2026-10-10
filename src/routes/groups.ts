@@ -14,6 +14,10 @@ const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService);
 const groupService = createGroupService(groupRepository);
 const groupController = createGroupController(groupService);
 
+router.get("/me/groups/overview", requireAuthenticatedUser, (req, res, next) =>
+  groupController.listMyGroupsOverview(req, res, next),
+);
+
 router.get("/me/groups", requireAuthenticatedUser, (req, res, next) =>
   groupController.listMyGroups(req, res, next),
 );
