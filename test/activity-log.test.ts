@@ -106,7 +106,7 @@ describe("GET /events/:eventId/activity-log", () => {
     expect(response.body).toEqual({ entries: [] });
   });
 
-  it("permite listar a un participante anónimo de su evento", async () => {
+  it("permite al mismo participante anónimo consultar el historial antes y después de confirmar", async () => {
     const anonymousParticipant = {
       ...participant,
       id: "participant-anonymous",
@@ -114,16 +114,44 @@ describe("GET /events/:eventId/activity-log", () => {
       isAnonymous: true,
     };
     const anonymousToken = tokenService.signParticipant(anonymousParticipant.id, eventId);
+    const scheduleConfirmedEntry = {
+      id: "activity-schedule-confirmed",
+      eventId,
+      type: "schedule_confirmed",
+      actorParticipantId: participant.id,
+      payload: { startDateTime: "2026-01-02T20:00:00.000Z" },
+      createdAt: new Date("2026-01-01T12:00:00Z"),
+      actor: { id: participant.id, username: participant.username },
+    };
+    let currentEvent = event;
     vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
-    vi.mocked(prisma.event.findUnique).mockResolvedValue(event as never);
-    vi.mocked(prisma.activityLog.findMany).mockResolvedValueOnce([] as never);
+    vi.mocked(prisma.event.findUnique).mockImplementation((() => currentEvent) as never);
+    vi.mocked(prisma.activityLog.findMany)
+      .mockResolvedValueOnce([] as never)
+      .mockResolvedValueOnce([scheduleConfirmedEntry] as never);
 
-    const response = await request(app)
+    const beforeConfirmation = await request(app)
+      .get(`/events/${eventId}/activity-log`)
+      .set("Authorization", `Bearer ${anonymousToken}`);
+    currentEvent = { ...event, status: "confirmed" };
+    const afterConfirmation = await request(app)
       .get(`/events/${eventId}/activity-log`)
       .set("Authorization", `Bearer ${anonymousToken}`);
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({ entries: [] });
+    expect(beforeConfirmation.status).toBe(200);
+    expect(beforeConfirmation.body).toEqual({ entries: [] });
+    expect(afterConfirmation.status).toBe(200);
+    expect(afterConfirmation.body).toEqual({
+      entries: [
+        {
+          id: scheduleConfirmedEntry.id,
+          type: scheduleConfirmedEntry.type,
+          actor: { participantId: participant.id, username: participant.username },
+          payload: scheduleConfirmedEntry.payload,
+          createdAt: scheduleConfirmedEntry.createdAt.toJSON(),
+        },
+      ],
+    });
   });
 
   it("devuelve 401 sin una sesión válida", async () => {
