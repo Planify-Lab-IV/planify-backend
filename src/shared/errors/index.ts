@@ -77,3 +77,10 @@ export class DebtAlreadySettledError extends AppError {
     this.name = "DebtAlreadySettledError";
   }
 }
+
+export class ExpensesClosedError extends AppError {
+  constructor() {
+    super("Los gastos del evento están cerrados", 409, "EXPENSES_CLOSED");
+    this.name = "ExpensesClosedError";
+  }
+}

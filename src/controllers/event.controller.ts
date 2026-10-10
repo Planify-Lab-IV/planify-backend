@@ -17,6 +17,7 @@ import { toParticipantResponseDTO } from "../dtos/participant/participant.respon
 export interface EventController {
   create(req: Request, res: Response, next: NextFunction): Promise<void>;
   cancel(req: Request, res: Response, next: NextFunction): Promise<void>;
+  closeExpenses(req: Request, res: Response, next: NextFunction): Promise<void>;
   confirmSchedule(req: Request, res: Response, next: NextFunction): Promise<void>;
   answerAttendance(req: Request, res: Response, next: NextFunction): Promise<void>;
   getById(req: Request, res: Response, next: NextFunction): Promise<void>;
@@ -55,6 +56,18 @@ export function createEventController(eventService: EventService): EventControll
         const eventId = getEventId(req);
 
         const event = await eventService.cancel(userId, eventId);
+        res.status(200).json(toEventResponseDTO(event));
+      } catch (error) {
+        next(error);
+      }
+    },
+
+    async closeExpenses(req: Request, res: Response, next: NextFunction): Promise<void> {
+      try {
+        const userId = getAuthenticatedUserId(req);
+        const eventId = getEventId(req);
+
+        const event = await eventService.closeExpenses(userId, eventId);
         res.status(200).json(toEventResponseDTO(event));
       } catch (error) {
         next(error);
