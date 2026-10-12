@@ -19,6 +19,19 @@ describe("validateRegisterDTO", () => {
     });
   });
 
+  it("acepta una contraseña de 72 bytes UTF-8 sin modificarla", () => {
+    const password = "é".repeat(36);
+
+    expect(
+      validateRegisterDTO({
+        name: "Ana",
+        username: "ana",
+        email: "ana@mail.com",
+        password,
+      }).password,
+    ).toBe(password);
+  });
+
   it.each([
     { name: "", username: "ana", email: "ana@mail.com", password: "password-segura" },
     { name: "a".repeat(81), username: "ana", email: "ana@mail.com", password: "password-segura" },
@@ -27,7 +40,9 @@ describe("validateRegisterDTO", () => {
     { name: "Ana", username: "ana perez", email: "ana@mail.com", password: "password-segura" },
     { name: "Ana", username: "ana", email: "correo-invalido", password: "password-segura" },
     { name: "Ana", username: "ana", email: "ana@mail.com", password: "corta" },
+    { name: "Ana", username: "ana", email: "ana@mail.com", password: "        " },
     { name: "Ana", username: "ana", email: "ana@mail.com", password: "a".repeat(73) },
+    { name: "Ana", username: "ana", email: "ana@mail.com", password: "é".repeat(36) + "A" },
     {
       name: "Ana",
       username: "ana",
