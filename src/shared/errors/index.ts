@@ -64,6 +64,13 @@ export class EventUnavailableError extends AppError {
   }
 }
 
+export class RegistrationConflictError extends AppError {
+  constructor() {
+    super("No se pudo crear la cuenta con esos datos", 409, "REGISTRATION_CONFLICT");
+    this.name = "RegistrationConflictError";
+  }
+}
+
 export class PendingDebtsError extends AppError {
   constructor() {
     super("No se puede cancelar un evento con deudas pendientes", 409, "PENDING_DEBTS");

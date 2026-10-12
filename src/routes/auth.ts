@@ -4,6 +4,7 @@ import { Router } from "express";
 import { createAuthController } from "../controllers/auth.controller.js";
 import { createAuthService } from "../services/auth.service.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { participantRepository } from "../repositories/participant.repository.js";
 import { createPasswordHasher } from "../infrastructure/security/password.hasher.js";
 import { createSessionTokenService } from "../infrastructure/security/session.token.service.js";
 import { env } from "../shared/config/env.js";
@@ -15,7 +16,12 @@ const router = Router();
 const passwordHasher = createPasswordHasher();
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
 const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService);
-const authService = createAuthService(userRepository, passwordHasher, sessionTokenService);
+const authService = createAuthService(
+  userRepository,
+  participantRepository,
+  passwordHasher,
+  sessionTokenService,
+);
 const authController = createAuthController(authService);
 
 router.post("/auth/login", (req, res, next) => authController.login(req, res, next));
