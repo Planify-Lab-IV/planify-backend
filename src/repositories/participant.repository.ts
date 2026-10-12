@@ -31,6 +31,13 @@ export interface AttendanceParticipant {
   attendanceState: AttendanceState;
 }
 
+export interface ParticipantReadState {
+  participantId: string;
+  eventId: string;
+  groupId: string;
+  lastReadAt: Date | null;
+}
+
 export interface ParticipantRepository {
   findById(id: string): Promise<Participant | null>;
 
@@ -55,6 +62,10 @@ export interface ParticipantRepository {
   }): Promise<Participant>;
 
   updateAttendance(id: string, state: AttendanceState): Promise<AttendanceParticipant>;
+
+  updateLastReadAt(id: string, date: Date): Promise<void>;
+
+  findParticipationsByUserId(userId: string): Promise<ParticipantReadState[]>;
 }
 
 export const participantRepository: ParticipantRepository = {
@@ -174,5 +185,35 @@ export const participantRepository: ParticipantRepository = {
         attendanceState: true,
       },
     });
+  },
+
+  async updateLastReadAt(id, date) {
+    await prisma.eventParticipant.update({
+      where: { id },
+      data: { lastReadAt: date },
+    });
+  },
+
+  async findParticipationsByUserId(userId) {
+    const participations = await prisma.eventParticipant.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        eventId: true,
+        lastReadAt: true,
+        event: {
+          select: {
+            groupId: true,
+          },
+        },
+      },
+    });
+
+    return participations.map(({ id, eventId, lastReadAt, event }) => ({
+      participantId: id,
+      eventId,
+      groupId: event.groupId,
+      lastReadAt,
+    }));
   },
 };
