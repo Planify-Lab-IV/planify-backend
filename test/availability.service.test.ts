@@ -71,6 +71,7 @@ function createParticipantRepository(participants: AttendanceParticipant[]): Par
   return {
     findById: vi.fn(),
     findByEventId: vi.fn(),
+    existsAnonymousWithUsername: vi.fn(async () => false),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(async (id) => {
       return participants.find((participant) => participant.id === id) ?? null;

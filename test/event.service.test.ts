@@ -558,6 +558,7 @@ function createInMemoryParticipantRepository(
   return {
     findById: vi.fn(),
     findByEventId: vi.fn(),
+    existsAnonymousWithUsername: vi.fn(async () => false),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(async (id) => records.get(id) ?? null),
     findAttendanceByEventIdAndUserId: vi.fn(async (eventId, userId) => {
