@@ -23,7 +23,7 @@ export async function validateAnonymousParticipantSession(
   }
 
   const event = await eventRepository.findById(session.eventId);
-  if (!event || event.status !== "active") {
+  if (!event || (event.status !== "active" && event.status !== "confirmed")) {
     throw new UnauthorizedError("Sesión de participante inválida");
   }
 

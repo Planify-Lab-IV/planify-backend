@@ -8,8 +8,10 @@ import type {
   AttendanceParticipant,
   ParticipantRepository,
 } from "../repositories/participant.repository.js";
+import type { ActivityLogService } from "./activity-log.service.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../shared/errors/index.js";
+import { validateEventId } from "../shared/event-id.js";
 
 export interface AvailabilityHeatmap {
   totalParticipants: number;
@@ -20,12 +22,6 @@ export interface AvailabilityService {
   save(eventId: string, actor: AttendanceActor, slots: AvailabilitySlotInput[]): Promise<void>;
   load(eventId: string, actor: AttendanceActor): Promise<AvailabilitySlotInput[]>;
   heatmap(userId: string, eventId: string): Promise<AvailabilityHeatmap>;
-}
-
-function validateEventId(eventId: string): void {
-  if (typeof eventId !== "string" || eventId.trim() === "") {
-    throw new ValidationError("El eventId es requerido");
-  }
 }
 
 function validateSlots(slots: AvailabilitySlotInput[]): void {
@@ -64,6 +60,7 @@ export function createAvailabilityService(
   eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
   availabilityRepository: AvailabilityRepository,
+  activityLogService: ActivityLogService,
 ): AvailabilityService {
   async function resolveParticipant(
     eventId: string,
@@ -101,6 +98,12 @@ export function createAvailabilityService(
 
       const participant = await resolveParticipant(eventId, actor);
       await availabilityRepository.replaceForParticipant(eventId, participant.id, slots);
+      await activityLogService.record({
+        eventId,
+        type: "availability_updated",
+        actorParticipantId: participant.id,
+        payload: { slotCount: slots.length },
+      });
     },
 
     async load(eventId, actor) {

@@ -24,6 +24,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       findMany: vi.fn(),
       groupBy: vi.fn(),
     },
+    activityLog: { create: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
   },

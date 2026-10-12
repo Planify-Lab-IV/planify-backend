@@ -55,6 +55,7 @@ function makeEventRepository(event: Event | null = activeEvent): EventRepository
     findById: vi.fn(async () => event),
     createAtomic: vi.fn(),
     cancelAtomic: vi.fn(),
+    confirmSchedule: vi.fn(),
     closeExpenses: vi.fn(),
   };
 }
@@ -98,6 +99,26 @@ describe("requireAuthenticatedAttendanceActor", () => {
     );
 
     const response = await request(makeApp())
+      .get("/attendance-protected")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      type: "anonymousParticipant",
+      participantId: anonymousParticipant.id,
+      eventId: anonymousParticipant.eventId,
+    });
+  });
+
+  it("mantiene válido el mismo token anónimo al confirmar el horario", async () => {
+    const token = createSessionTokenService(TEST_SECRET).signParticipant(
+      anonymousParticipant.id,
+      anonymousParticipant.eventId,
+    );
+
+    const response = await request(
+      makeApp(anonymousParticipant, { ...activeEvent, status: "confirmed" }),
+    )
       .get("/attendance-protected")
       .set("Authorization", `Bearer ${token}`);
 

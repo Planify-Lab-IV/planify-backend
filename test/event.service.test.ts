@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { type Event, type EventRepository } from "../src/repositories/event.repository.js";
-import type { DebtRepository } from "../src/repositories/debt.repository.js";
+import type { DebtRepository, SimplifiedDebtRecord } from "../src/repositories/debt.repository.js";
 import type { GroupRepository } from "../src/repositories/group.repository.js";
 import type {
   AttendanceParticipant,
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
 import type { UserRepository } from "../src/repositories/user.repository.js";
+import type { ActivityLogService } from "../src/services/activity-log.service.js";
 import { createEventService } from "../src/services/event.service.js";
 import {
   EventUnavailableError,
@@ -105,12 +106,13 @@ const unusedParticipantRepository: ParticipantRepository = {
   findAttendanceByEventIdAndUserId: vi.fn(),
   createAnonymous: vi.fn(),
   updateAttendance: vi.fn(),
-  invalidateAnonymousSessions: vi.fn(),
 };
 
 const unusedDebtRepository: DebtRepository = {
+  findById: vi.fn(),
   findByEventId: vi.fn(async () => []),
   findSettledByEventId: vi.fn(),
+  markSettled: vi.fn(),
   findByUserId: vi.fn(),
   findPendingBetween: vi.fn(),
   markManySettled: vi.fn(),
@@ -118,6 +120,26 @@ const unusedDebtRepository: DebtRepository = {
   withinTransaction: vi.fn(),
   replacePendingForEvent: vi.fn(),
 };
+
+function createActivityLogServiceMock(): ActivityLogService {
+  return { record: vi.fn(async () => {}), list: vi.fn(async () => []) };
+}
+
+const unusedActivityLogService = createActivityLogServiceMock();
+
+function makeSimplifiedDebt(overrides: Partial<SimplifiedDebtRecord> = {}): SimplifiedDebtRecord {
+  return {
+    id: "debt-1",
+    eventId: "event-1",
+    amountCents: 1000,
+    status: "pending",
+    settledAt: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    debtor: { id: "participant-debtor", username: "Deudor" },
+    creditor: { id: "participant-creditor", username: "Acreedor" },
+    ...overrides,
+  };
+}
 
 describe("EventService.getById", () => {
   function makeService(event: Event | null = makeEvent()) {
@@ -128,6 +150,7 @@ describe("EventService.getById", () => {
       unusedUserRepository,
       unusedParticipantRepository,
       unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     return { service, eventRepository };
@@ -247,6 +270,7 @@ describe("EventService.cancel", () => {
       unusedUserRepository,
       unusedParticipantRepository,
       unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     await expect(service.cancel("user-organizer", "event-1")).resolves.toMatchObject({
@@ -261,18 +285,7 @@ describe("EventService.cancel", () => {
     const eventRepository = createInMemoryEventRepository([makeEvent()]);
     const debtRepository: DebtRepository = {
       ...unusedDebtRepository,
-      findByEventId: vi.fn(async () => [
-        {
-          id: "debt-1",
-          eventId: "event-1",
-          debtorParticipantId: "participant-debtor",
-          creditorParticipantId: "participant-creditor",
-          amountCents: 1000,
-          status: "pending",
-          settledAt: null,
-          createdAt: new Date("2026-01-01T00:00:00Z"),
-        },
-      ]),
+      findByEventId: vi.fn(async () => [makeSimplifiedDebt()]),
     };
     const service = createEventService(
       eventRepository,
@@ -280,6 +293,7 @@ describe("EventService.cancel", () => {
       unusedUserRepository,
       unusedParticipantRepository,
       debtRepository,
+      unusedActivityLogService,
     );
 
     await expect(service.cancel("user-organizer", "event-1")).rejects.toBeInstanceOf(
@@ -293,16 +307,10 @@ describe("EventService.cancel", () => {
     const debtRepository: DebtRepository = {
       ...unusedDebtRepository,
       findByEventId: vi.fn(async () => [
-        {
-          id: "debt-1",
-          eventId: "event-1",
-          debtorParticipantId: "participant-debtor",
-          creditorParticipantId: "participant-creditor",
-          amountCents: 1000,
+        makeSimplifiedDebt({
           status: "settled",
           settledAt: new Date("2026-01-01T00:00:00Z"),
-          createdAt: new Date("2026-01-01T00:00:00Z"),
-        },
+        }),
       ]),
     };
     const service = createEventService(
@@ -311,6 +319,7 @@ describe("EventService.cancel", () => {
       unusedUserRepository,
       unusedParticipantRepository,
       debtRepository,
+      unusedActivityLogService,
     );
 
     await expect(service.cancel("user-organizer", "event-1")).resolves.toMatchObject({
@@ -326,6 +335,7 @@ describe("EventService.cancel", () => {
       unusedUserRepository,
       unusedParticipantRepository,
       unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     await expect(service.cancel("user-organizer", "event-unknown")).rejects.toBeInstanceOf(
@@ -355,6 +365,7 @@ describe("EventService.cancel", () => {
       unusedUserRepository,
       unusedParticipantRepository,
       unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     await expect(service.cancel("user-member", "event-1")).rejects.toBeInstanceOf(ForbiddenError);
@@ -370,6 +381,7 @@ describe("EventService.cancel", () => {
       unusedUserRepository,
       unusedParticipantRepository,
       unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     await expect(service.cancel("user-organizer", "event-1")).resolves.toBe(cancelledEvent);
@@ -385,6 +397,8 @@ describe("EventService.closeExpenses", () => {
       unusedGroupRepository,
       unusedUserRepository,
       unusedParticipantRepository,
+      unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     return { service, eventRepository };
@@ -449,35 +463,53 @@ describe("EventService.closeExpenses", () => {
 describe("EventService.confirmSchedule", () => {
   function makeService(event: Event | null = makeEvent()) {
     const eventRepository = createInMemoryEventRepository(event ? [event] : []);
+    const organizerParticipant = makeAttendanceParticipant({
+      id: "participant-organizer",
+      userId: "user-organizer",
+      isOrganizer: true,
+    });
+    const participantRepository: ParticipantRepository = {
+      ...unusedParticipantRepository,
+      findAttendanceByEventIdAndUserId: vi.fn(async () => organizerParticipant),
+    };
+    const activityLogService = createActivityLogServiceMock();
     const service = createEventService(
       eventRepository,
       unusedGroupRepository,
       unusedUserRepository,
-      unusedParticipantRepository,
+      participantRepository,
       unusedDebtRepository,
+      activityLogService,
     );
 
-    return { service, eventRepository };
+    return { service, eventRepository, activityLogService };
   }
 
   it("confirma un horario futuro elegido por el organizador", async () => {
-    const { service, eventRepository } = makeService();
+    const { service, eventRepository, activityLogService } = makeService();
     const startDateTime = new Date("2099-12-31T22:00:00.000Z");
 
     await expect(
       service.confirmSchedule("user-organizer", "event-1", startDateTime),
     ).resolves.toMatchObject({ status: "confirmed", startDateTime });
     expect(eventRepository.confirmSchedule).toHaveBeenCalledWith("event-1", startDateTime);
+    expect(activityLogService.record).toHaveBeenCalledWith({
+      eventId: "event-1",
+      type: "schedule_confirmed",
+      actorParticipantId: "participant-organizer",
+      payload: { startDateTime: startDateTime.toISOString() },
+    });
   });
 
   it("devuelve 400 para una fecha inválida sin consultar el evento", async () => {
-    const { service, eventRepository } = makeService();
+    const { service, eventRepository, activityLogService } = makeService();
 
     await expect(
       service.confirmSchedule("user-organizer", "event-1", new Date("invalid")),
     ).rejects.toBeInstanceOf(ValidationError);
     expect(eventRepository.findById).not.toHaveBeenCalled();
     expect(eventRepository.confirmSchedule).not.toHaveBeenCalled();
+    expect(activityLogService.record).not.toHaveBeenCalled();
   });
 
   it("devuelve 400 para una fecha pasada sin consultar el evento", async () => {
@@ -580,7 +612,6 @@ function createInMemoryParticipantRepository(
       records.set(id, updatedParticipant);
       return updatedParticipant;
     }),
-    invalidateAnonymousSessions: vi.fn(),
   };
 }
 
@@ -597,6 +628,7 @@ describe("EventService.answerAttendance", () => {
       unusedUserRepository,
       participantRepository,
       unusedDebtRepository,
+      unusedActivityLogService,
     );
 
     return { service, participantRepository };

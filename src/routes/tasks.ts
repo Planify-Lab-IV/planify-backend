@@ -1,10 +1,12 @@
 import { Router } from "express";
 import { createTaskController } from "../controllers/task.controller.js";
 import { createSessionTokenService } from "../infrastructure/security/session.token.service.js";
+import { activityLogRepository } from "../repositories/activity-log.repository.js";
 import { eventRepository } from "../repositories/event.repository.js";
 import { participantRepository } from "../repositories/participant.repository.js";
 import { taskRepository } from "../repositories/task.repository.js";
 import { createTaskService } from "../services/task.service.js";
+import { createActivityLogService } from "../services/activity-log.service.js";
 import { env } from "../shared/config/env.js";
 import { createAttendanceAuthMiddleware } from "../shared/middlewares/attendance.auth.middleware.js";
 
@@ -16,7 +18,17 @@ const requireAttendanceAuth = createAttendanceAuthMiddleware(
   participantRepository,
   eventRepository,
 );
-const taskService = createTaskService(taskRepository, eventRepository, participantRepository);
+const activityLogService = createActivityLogService(
+  activityLogRepository,
+  eventRepository,
+  participantRepository,
+);
+const taskService = createTaskService(
+  taskRepository,
+  eventRepository,
+  participantRepository,
+  activityLogService,
+);
 const taskController = createTaskController(taskService);
 
 router.get("/events/:eventId/tasks", requireAttendanceAuth, (req, res, next) =>

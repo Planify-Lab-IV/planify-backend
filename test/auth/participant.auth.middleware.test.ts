@@ -21,7 +21,7 @@ const participant: Participant = {
   isAnonymous: true,
 };
 
-function makeEvent(status: "active" | "cancelled"): Event {
+function makeEvent(status: Event["status"]): Event {
   return {
     id: "event-1",
     groupId: "group-1",
@@ -54,6 +54,7 @@ function makeEventRepository(event: Event | null): EventRepository {
     findById: vi.fn(async () => event),
     createAtomic: vi.fn(),
     cancelAtomic: vi.fn(),
+    confirmSchedule: vi.fn(),
     closeExpenses: vi.fn(),
   };
 }
@@ -78,6 +79,18 @@ function makeApp(foundParticipant: Participant | null, event: Event | null) {
 describe("requireAuthenticatedParticipant", () => {
   it("acepta una sesión anónima de un evento activo", async () => {
     const { app, tokenService } = makeApp(participant, makeEvent("active"));
+    const token = tokenService.signParticipant(participant.id, participant.eventId);
+
+    const response = await request(app)
+      .get("/participant-protected")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ participantId: participant.id, eventId: participant.eventId });
+  });
+
+  it("acepta una sesión anónima de un evento con horario confirmado", async () => {
+    const { app, tokenService } = makeApp(participant, makeEvent("confirmed"));
     const token = tokenService.signParticipant(participant.id, participant.eventId);
 
     const response = await request(app)

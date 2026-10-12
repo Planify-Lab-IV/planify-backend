@@ -26,6 +26,8 @@ import { createDebtService } from "../services/debt.service.js";
 import { createExpenseService } from "../services/expense.service.js";
 import { createExpenseController } from "../controllers/expense.controller.js";
 import { createDebtController } from "../controllers/debt.controller.js";
+import { activityLogRepository } from "../repositories/activity-log.repository.js";
+import { createActivityLogService } from "../services/activity-log.service.js";
 
 const router = Router();
 
@@ -37,6 +39,11 @@ const requireAttendanceAuth = createAttendanceAuthMiddleware(
   participantRepository,
   eventRepository,
 );
+const activityLogService = createActivityLogService(
+  activityLogRepository,
+  eventRepository,
+  participantRepository,
+);
 
 const eventService = createEventService(
   eventRepository,
@@ -44,6 +51,7 @@ const eventService = createEventService(
   userRepository,
   participantRepository,
   debtRepository,
+  activityLogService,
 );
 const eventController = createEventController(eventService);
 
@@ -73,6 +81,7 @@ const availabilityService = createAvailabilityService(
   eventRepository,
   participantRepository,
   availabilityRepository,
+  activityLogService,
 );
 const availabilityController = createAvailabilityController(availabilityService);
 
@@ -95,6 +104,7 @@ const expenseService = createExpenseService(
   eventRepository,
   participantRepository,
   debtService,
+  activityLogService,
 );
 const expenseController = createExpenseController(expenseService);
 
