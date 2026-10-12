@@ -85,6 +85,7 @@ function createParticipantRepository(
       async (id) => participants.find((participant) => participant.id === id) ?? null,
     ),
     findByEventId: vi.fn(async () => participants),
+    existsAnonymousWithUsername: vi.fn(async () => false),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(),
     findAttendanceByEventIdAndUserId: vi.fn(async () => creator),
@@ -107,6 +108,7 @@ function createDebtServiceMock(): DebtService {
     getBalanceSummary: vi.fn(),
     getPeopleBalances: vi.fn(),
     getPersonDetail: vi.fn(),
+    settleWithPerson: vi.fn(),
     settleDebt: vi.fn(),
   };
 }

@@ -92,6 +92,7 @@ const unusedGroupRepository: GroupRepository = {
 
 const unusedUserRepository: UserRepository = {
   findById: vi.fn(),
+  findByUsername: vi.fn(),
   findByEmail: vi.fn(),
   findPublicByIdentifier: vi.fn(),
   findByIdentifier: vi.fn(),
@@ -101,6 +102,7 @@ const unusedUserRepository: UserRepository = {
 const unusedParticipantRepository: ParticipantRepository = {
   findById: vi.fn(),
   findByEventId: vi.fn(),
+  existsAnonymousWithUsername: vi.fn(),
   findByEventIdAndUsername: vi.fn(),
   findAttendanceById: vi.fn(),
   findAttendanceByEventIdAndUserId: vi.fn(),
@@ -114,9 +116,6 @@ const unusedDebtRepository: DebtRepository = {
   findSettledByEventId: vi.fn(),
   markSettled: vi.fn(),
   findByUserId: vi.fn(),
-  findPendingBetween: vi.fn(),
-  markManySettled: vi.fn(),
-  findPendingEventIds: vi.fn(),
   withinTransaction: vi.fn(),
   replacePendingForEvent: vi.fn(),
 };
@@ -592,6 +591,7 @@ function createInMemoryParticipantRepository(
   return {
     findById: vi.fn(),
     findByEventId: vi.fn(),
+    existsAnonymousWithUsername: vi.fn(async () => false),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(async (id) => records.get(id) ?? null),
     findAttendanceByEventIdAndUserId: vi.fn(async (eventId, userId) => {
