@@ -25,6 +25,7 @@ const authService = createAuthService(
 const authController = createAuthController(authService);
 
 router.post("/auth/login", (req, res, next) => authController.login(req, res, next));
+router.post("/auth/register", (req, res, next) => authController.register(req, res, next));
 router.get("/auth/me", requireAuthenticatedUser, (req, res, next) =>
   authController.getCurrentUser(req, res, next),
 );
