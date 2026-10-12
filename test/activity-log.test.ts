@@ -12,7 +12,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       findUnique: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
-      update: vi.fn(),
+      updateMany: vi.fn(),
     },
     activityLog: { create: vi.fn(), findMany: vi.fn(), count: vi.fn() },
   },
@@ -222,7 +222,7 @@ describe("POST /events/:eventId/activity-log/read", () => {
   it("marca como leído el evento para un usuario registrado", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
     vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(participant as never);
-    vi.mocked(prisma.eventParticipant.update).mockResolvedValueOnce({} as never);
+    vi.mocked(prisma.eventParticipant.updateMany).mockResolvedValueOnce({ count: 1 } as never);
 
     const response = await request(app)
       .post(`/events/${eventId}/activity-log/read`)
@@ -230,8 +230,11 @@ describe("POST /events/:eventId/activity-log/read", () => {
 
     expect(response.status).toBe(204);
     expect(response.text).toBe("");
-    expect(prisma.eventParticipant.update).toHaveBeenCalledWith({
-      where: { id: participant.id },
+    expect(prisma.eventParticipant.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: participant.id,
+        OR: [{ lastReadAt: null }, { lastReadAt: { lt: expect.any(Date) } }],
+      },
       data: { lastReadAt: expect.any(Date) },
     });
   });
@@ -245,7 +248,7 @@ describe("POST /events/:eventId/activity-log/read", () => {
     };
     vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
     vi.mocked(prisma.event.findUnique).mockResolvedValue(event as never);
-    vi.mocked(prisma.eventParticipant.update).mockResolvedValueOnce({} as never);
+    vi.mocked(prisma.eventParticipant.updateMany).mockResolvedValueOnce({ count: 1 } as never);
 
     const response = await request(app)
       .post(`/events/${eventId}/activity-log/read`)
@@ -255,8 +258,11 @@ describe("POST /events/:eventId/activity-log/read", () => {
       );
 
     expect(response.status).toBe(204);
-    expect(prisma.eventParticipant.update).toHaveBeenCalledWith({
-      where: { id: anonymousParticipant.id },
+    expect(prisma.eventParticipant.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: anonymousParticipant.id,
+        OR: [{ lastReadAt: null }, { lastReadAt: { lt: expect.any(Date) } }],
+      },
       data: { lastReadAt: expect.any(Date) },
     });
   });
@@ -265,7 +271,7 @@ describe("POST /events/:eventId/activity-log/read", () => {
     const response = await request(app).post(`/events/${eventId}/activity-log/read`);
 
     expect(response.status).toBe(401);
-    expect(prisma.eventParticipant.update).not.toHaveBeenCalled();
+    expect(prisma.eventParticipant.updateMany).not.toHaveBeenCalled();
   });
 
   it("devuelve 404 si el usuario no participa del evento", async () => {
@@ -278,7 +284,7 @@ describe("POST /events/:eventId/activity-log/read", () => {
 
     expect(response.status).toBe(404);
     expect(response.body.error).toBe("NOT_FOUND");
-    expect(prisma.eventParticipant.update).not.toHaveBeenCalled();
+    expect(prisma.eventParticipant.updateMany).not.toHaveBeenCalled();
   });
 });
 

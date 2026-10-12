@@ -188,8 +188,11 @@ export const participantRepository: ParticipantRepository = {
   },
 
   async updateLastReadAt(id, date) {
-    await prisma.eventParticipant.update({
-      where: { id },
+    await prisma.eventParticipant.updateMany({
+      where: {
+        id,
+        OR: [{ lastReadAt: null }, { lastReadAt: { lt: date } }],
+      },
       data: { lastReadAt: date },
     });
   },
