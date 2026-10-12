@@ -108,6 +108,7 @@ function createDebtServiceMock(): DebtService {
     getBalanceSummary: vi.fn(),
     getPeopleBalances: vi.fn(),
     getPersonDetail: vi.fn(),
+    settleWithPerson: vi.fn(),
     settleDebt: vi.fn(),
   };
 }
