@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
+import type { Prisma } from "@prisma/client";
 
 import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
@@ -399,18 +400,24 @@ describe("ParticipantRepository attendance operations", () => {
       releaseOlderWrite = resolve;
     });
 
-    vi.mocked(prisma.eventParticipant.updateMany).mockImplementation(async (args) => {
+    vi.mocked(prisma.eventParticipant.updateMany).mockImplementation(((
+      args: Prisma.EventParticipantUpdateManyArgs,
+    ) => {
       const readAt = args.data.lastReadAt;
 
       if (!(readAt instanceof Date)) {
-        throw new Error("Se esperaba una fecha de lectura");
+        return Promise.reject(new Error("Se esperaba una fecha de lectura"));
       }
 
       if (readAt.getTime() === olderReadAt.getTime()) {
         notifyOlderWriteStarted?.();
-        await releaseOlderWritePromise;
+        return releaseOlderWritePromise.then(() => applyReadAt(readAt));
       }
 
+      return applyReadAt(readAt);
+    }) as never);
+
+    function applyReadAt(readAt: Date) {
       const canUpdate =
         persistedLastReadAt === null || persistedLastReadAt.getTime() < readAt.getTime();
 
@@ -418,8 +425,8 @@ describe("ParticipantRepository attendance operations", () => {
         persistedLastReadAt = readAt;
       }
 
-      return { count: canUpdate ? 1 : 0 } as never;
-    });
+      return Promise.resolve({ count: canUpdate ? 1 : 0 } as never);
+    }
 
     const olderRead = participantRepository.updateLastReadAt("participant-1", olderReadAt);
     await olderWriteStarted;

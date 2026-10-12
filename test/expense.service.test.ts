@@ -90,6 +90,8 @@ function createParticipantRepository(
     findAttendanceByEventIdAndUserId: vi.fn(async () => creator),
     createAnonymous: vi.fn(),
     updateAttendance: vi.fn(),
+    updateLastReadAt: vi.fn(),
+    findParticipationsByUserId: vi.fn(),
   };
 }
 
@@ -112,7 +114,12 @@ function createDebtServiceMock(): DebtService {
 }
 
 function createActivityLogServiceMock(): ActivityLogService {
-  return { record: vi.fn(async () => {}), list: vi.fn(async () => []) };
+  return {
+    record: vi.fn(async () => {}),
+    list: vi.fn(async () => []),
+    markAsRead: vi.fn(async () => {}),
+    getUnreadCounts: vi.fn(async () => ({ events: [], groups: [] })),
+  };
 }
 
 function createEventRepository(event: Event | null = makeEvent()): EventRepository {
