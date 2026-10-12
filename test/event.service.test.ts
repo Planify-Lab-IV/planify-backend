@@ -91,6 +91,7 @@ const unusedGroupRepository: GroupRepository = {
 
 const unusedUserRepository: UserRepository = {
   findById: vi.fn(),
+  findByUsername: vi.fn(),
   findByEmail: vi.fn(),
   findPublicByIdentifier: vi.fn(),
   findByIdentifier: vi.fn(),
@@ -100,6 +101,7 @@ const unusedUserRepository: UserRepository = {
 const unusedParticipantRepository: ParticipantRepository = {
   findById: vi.fn(),
   findByEventId: vi.fn(),
+  existsAnonymousWithUsername: vi.fn(),
   findByEventIdAndUsername: vi.fn(),
   findAttendanceById: vi.fn(),
   findAttendanceByEventIdAndUserId: vi.fn(),
