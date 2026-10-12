@@ -6,6 +6,7 @@ import type {
 } from "../repositories/expense.repository.js";
 import type { EventRepository } from "../repositories/event.repository.js";
 import type { ParticipantRepository } from "../repositories/participant.repository.js";
+import type { ActivityLogService } from "./activity-log.service.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import type { DebtService } from "./debt.service.js";
 import {
@@ -15,6 +16,7 @@ import {
   NotFoundError,
   ValidationError,
 } from "../shared/errors/index.js";
+import { validateEventId } from "../shared/event-id.js";
 import type { CreateExpenseDTO } from "../validators/expense/create.expense.validator.js";
 
 export interface ExpenseService {
@@ -34,12 +36,11 @@ export function createExpenseService(
   eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
   debtService: DebtService,
+  activityLogService: ActivityLogService,
 ): ExpenseService {
   return {
     async createExpense(eventId, actor, dto) {
-      if (typeof eventId !== "string" || eventId.trim() === "") {
-        throw new ValidationError("El eventId es requerido");
-      }
+      validateEventId(eventId);
 
       const event = await eventRepository.findById(eventId);
       if (!event) {
@@ -122,6 +123,17 @@ export function createExpenseService(
 
       const createdExpense = await expenseRepository.createAtomic(params);
       await debtService.recalculateForEvent(eventId);
+      await activityLogService.record({
+        eventId,
+        type: "expense_created",
+        actorParticipantId: createdByParticipantId,
+        payload: {
+          expenseId: createdExpense.id,
+          description: createdExpense.description,
+          totalAmountCents: createdExpense.totalAmountCents,
+        },
+      });
+
       return createdExpense;
     },
   };

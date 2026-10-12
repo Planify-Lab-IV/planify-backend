@@ -335,3 +335,130 @@ describe("DebtRepository.markSettled", () => {
     await expect(debtRepository.markSettled("debt-1", new Date())).resolves.toBe(0);
   });
 });
+
+describe("DebtRepository debt settlement transaction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("encuentra pendientes en ambas direcciones con una contraparte registrada", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { id: "debt-1", eventId: "event-1" },
+      { id: "debt-2", eventId: "event-2" },
+    ]);
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) => callback({ simplifiedDebt: { findMany } })) as never);
+
+    const result = await debtRepository.withinTransaction((transaction) =>
+      transaction.findPendingBetween("user-ana", { type: "user", userId: "user-marcos" }),
+    );
+
+    expect(result).toEqual([
+      { id: "debt-1", eventId: "event-1" },
+      { id: "debt-2", eventId: "event-2" },
+    ]);
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        status: "pending",
+        OR: [
+          { debtor: { userId: "user-ana" }, creditor: { userId: "user-marcos" } },
+          { debtor: { userId: "user-marcos" }, creditor: { userId: "user-ana" } },
+        ],
+      },
+      select: { id: true, eventId: true },
+      orderBy: { id: "asc" },
+    });
+  });
+
+  it("limita una contraparte anónima a su participante exacto", async () => {
+    const findMany = vi.fn().mockResolvedValue([]);
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) => callback({ simplifiedDebt: { findMany } })) as never);
+
+    await debtRepository.withinTransaction((transaction) =>
+      transaction.findPendingBetween("user-ana", {
+        type: "participant",
+        participantId: "participant-invitado",
+      }),
+    );
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: {
+        status: "pending",
+        OR: [
+          {
+            debtor: { userId: "user-ana" },
+            creditor: { id: "participant-invitado", userId: null, isAnonymous: true },
+          },
+          {
+            debtor: { id: "participant-invitado", userId: null, isAnonymous: true },
+            creditor: { userId: "user-ana" },
+          },
+        ],
+      },
+      select: { id: true, eventId: true },
+      orderBy: { id: "asc" },
+    });
+  });
+
+  it("marca únicamente la lista exacta de deudas pendientes", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 2 });
+    const settledAt = new Date("2026-10-01T00:00:00.000Z");
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) => callback({ simplifiedDebt: { updateMany } })) as never);
+
+    await expect(
+      debtRepository.withinTransaction((transaction) =>
+        transaction.markManySettled(["debt-1", "debt-2"], settledAt),
+      ),
+    ).resolves.toBe(2);
+
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: { in: ["debt-1", "debt-2"] }, status: "pending" },
+      data: { status: "settled", settledAt },
+    });
+  });
+
+  it("no ejecuta un update cuando no hay deudas", async () => {
+    const updateMany = vi.fn();
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) => callback({ simplifiedDebt: { updateMany } })) as never);
+
+    await expect(
+      debtRepository.withinTransaction((transaction) =>
+        transaction.markManySettled([], new Date()),
+      ),
+    ).resolves.toBe(0);
+
+    expect(updateMany).not.toHaveBeenCalled();
+  });
+
+  it("devuelve los eventos que todavía tienen deudas pendientes", async () => {
+    const findMany = vi.fn().mockResolvedValue([{ eventId: "event-2" }]);
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) => callback({ simplifiedDebt: { findMany } })) as never);
+
+    await expect(
+      debtRepository.withinTransaction((transaction) =>
+        transaction.findPendingEventIds(["event-1", "event-2"]),
+      ),
+    ).resolves.toEqual(["event-2"]);
+
+    expect(findMany).toHaveBeenCalledWith({
+      where: { eventId: { in: ["event-1", "event-2"] }, status: "pending" },
+      select: { eventId: true },
+      distinct: ["eventId"],
+      orderBy: { eventId: "asc" },
+    });
+  });
+});

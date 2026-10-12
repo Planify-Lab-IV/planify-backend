@@ -19,6 +19,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       updateMany: vi.fn(),
     },
     simplifiedDebt: { findMany: vi.fn() },
+    activityLog: { create: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
     $queryRaw: vi.fn(),
   },

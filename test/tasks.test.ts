@@ -10,6 +10,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     event: { findUnique: vi.fn() },
     eventParticipant: { findUnique: vi.fn(), findFirst: vi.fn() },
     task: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+    activityLog: { create: vi.fn(), findMany: vi.fn() },
   },
 }));
 

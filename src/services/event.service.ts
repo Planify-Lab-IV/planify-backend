@@ -6,6 +6,7 @@ import type {
   AttendanceParticipant,
   ParticipantRepository,
 } from "../repositories/participant.repository.js";
+import type { ActivityLogService } from "./activity-log.service.js";
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import {
   EventUnavailableError,
@@ -35,6 +36,7 @@ export function createEventService(
   userRepository: UserRepository,
   participantRepository: ParticipantRepository,
   debtRepository: DebtRepository,
+  activityLogService: ActivityLogService,
 ): EventService {
   return {
     async getById(eventId: string, actor: AttendanceActor): Promise<Event> {
@@ -218,6 +220,26 @@ export function createEventService(
 
       if (!confirmedEvent) {
         throw new ValidationError("No se puede confirmar el horario de un evento cancelado");
+      }
+
+      try {
+        const organizerParticipant = await participantRepository.findAttendanceByEventIdAndUserId(
+          eventId,
+          userId,
+        );
+
+        if (!organizerParticipant) {
+          console.error("No se encontró al organizador para registrar la confirmación del horario");
+        } else {
+          await activityLogService.record({
+            eventId,
+            type: "schedule_confirmed",
+            actorParticipantId: organizerParticipant.id,
+            payload: { startDateTime: startDateTime.toISOString() },
+          });
+        }
+      } catch (error) {
+        console.error("No se pudo registrar la confirmación del horario", error);
       }
 
       return confirmedEvent;

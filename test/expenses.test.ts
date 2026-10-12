@@ -25,6 +25,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       deleteMany: vi.fn(),
       createMany: vi.fn(),
     },
+    activityLog: { create: vi.fn(), findMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -261,6 +262,107 @@ describe("POST /events/:eventId/expenses", () => {
     expect(response.status).toBe(403);
     expect(response.body.error).toBe("FORBIDDEN");
     expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("permite a un participante anónimo crear gastos en un evento confirmado", async () => {
+    const anonymousParticipant = {
+      id: "participant-anonymous",
+      eventId,
+      username: "invitado",
+      isAnonymous: true,
+    };
+    const anonymousToken = createSessionTokenService(env.JWT_SECRET).signParticipant(
+      anonymousParticipant.id,
+      eventId,
+    );
+    const participants = [
+      ...body.payers.map((payer) => ({
+        id: payer.participantId,
+        eventId,
+        username: payer.participantId,
+        isAnonymous: false,
+      })),
+      { id: "participant-cami", eventId, username: "cami", isAnonymous: false },
+      anonymousParticipant,
+    ];
+    const createdAt = new Date("2026-09-20T00:00:00.000Z");
+    const createdExpense = {
+      id: "expense-1",
+      eventId,
+      description: body.description,
+      totalAmountCents: body.totalAmountCents,
+      createdByParticipantId: anonymousParticipant.id,
+      createdAt,
+      payers: body.payers.map((payer) => ({ ...payer, expenseId: "expense-1" })),
+      debtors: body.debtors.map((debtor) => ({ ...debtor, expenseId: "expense-1" })),
+    };
+    const confirmedEvent = {
+      id: eventId,
+      status: "confirmed",
+      expensesClosed: false,
+      participants: [],
+    };
+
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(confirmedEvent as never);
+    vi.mocked(prisma.eventParticipant.findMany).mockResolvedValueOnce(participants as never);
+    vi.mocked(prisma.expense.create).mockResolvedValueOnce(createdExpense as never);
+    vi.mocked(prisma.expense.findMany).mockResolvedValueOnce([createdExpense] as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([] as never);
+    vi.mocked(prisma.simplifiedDebt.deleteMany).mockResolvedValueOnce({ count: 0 } as never);
+    vi.mocked(prisma.simplifiedDebt.createMany).mockResolvedValueOnce({ count: 2 } as never);
+    vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
+      callback({
+        expense: { create: prisma.expense.create },
+        simplifiedDebt: {
+          deleteMany: prisma.simplifiedDebt.deleteMany,
+          createMany: prisma.simplifiedDebt.createMany,
+        },
+      })) as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${anonymousToken}`)
+      .send(body);
+
+    expect(response.status).toBe(201);
+    expect(response.body.createdByParticipantId).toBe(anonymousParticipant.id);
+  });
+
+  it("mantiene el cierre de gastos para una sesión anónima en un evento confirmado", async () => {
+    const anonymousParticipant = {
+      id: "participant-anonymous",
+      eventId,
+      username: "invitado",
+      isAnonymous: true,
+    };
+    const anonymousToken = createSessionTokenService(env.JWT_SECRET).signParticipant(
+      anonymousParticipant.id,
+      eventId,
+    );
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce({
+        id: eventId,
+        status: "confirmed",
+        expensesClosed: false,
+        participants: [],
+      } as never)
+      .mockResolvedValueOnce({
+        id: eventId,
+        status: "confirmed",
+        expensesClosed: true,
+        participants: [],
+      } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${anonymousToken}`)
+      .send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EXPENSES_CLOSED");
     expect(prisma.expense.create).not.toHaveBeenCalled();
   });
 });

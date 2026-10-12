@@ -1,13 +1,11 @@
 import type { Request } from "express";
 import type { AttendanceActor } from "./auth/attendance.actor.js";
 import { UnauthorizedError, ValidationError } from "./errors/index.js";
+import { validateEventId } from "./event-id.js";
 
 export function getEventId(req: Request): string {
   const eventId = req.params.eventId;
-  if (typeof eventId !== "string" || eventId.trim() === "") {
-    throw new ValidationError("El eventId es requerido");
-  }
-
+  validateEventId(eventId);
   return eventId;
 }
 

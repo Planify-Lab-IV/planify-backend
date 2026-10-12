@@ -5,6 +5,7 @@ import type {
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
 import type { Task, TaskRepository } from "../src/repositories/task.repository.js";
+import type { ActivityLogService } from "../src/services/activity-log.service.js";
 import { createTaskService } from "../src/services/task.service.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../src/shared/errors/index.js";
 
@@ -111,6 +112,10 @@ function createTaskRepository(initialTasks: Task[]): TaskRepository {
   };
 }
 
+function createActivityLogServiceMock(): ActivityLogService {
+  return { record: vi.fn(async () => {}), list: vi.fn(async () => []) };
+}
+
 function makeService(
   tasks: Task[] = [makeTask()],
   participants: AttendanceParticipant[] = [makeParticipant()],
@@ -119,14 +124,20 @@ function makeService(
   const taskRepository = createTaskRepository(tasks);
   const eventRepository = createEventRepository(events);
   const participantRepository = createParticipantRepository(participants);
-  const service = createTaskService(taskRepository, eventRepository, participantRepository);
+  const activityLogService = createActivityLogServiceMock();
+  const service = createTaskService(
+    taskRepository,
+    eventRepository,
+    participantRepository,
+    activityLogService,
+  );
 
-  return { service, taskRepository, eventRepository, participantRepository };
+  return { service, taskRepository, eventRepository, participantRepository, activityLogService };
 }
 
 describe("TaskService", () => {
   it("crea una tarea sin asignar para el participante que actúa", async () => {
-    const { service, taskRepository } = makeService([]);
+    const { service, taskRepository, activityLogService } = makeService([]);
 
     await expect(
       service.create("event-1", { type: "user", userId: "user-1" }, "  Comprar pan  "),
@@ -145,6 +156,12 @@ describe("TaskService", () => {
       assignedToParticipantId: null,
       createdByParticipantId: "participant-user",
     });
+    expect(activityLogService.record).toHaveBeenCalledWith({
+      eventId: "event-1",
+      type: "task_created",
+      actorParticipantId: "participant-user",
+      payload: { taskId: "task-1", title: "Comprar pan" },
+    });
   });
 
   it("lista solo las tareas del evento para un participante", async () => {
@@ -155,6 +172,17 @@ describe("TaskService", () => {
     await expect(service.list("event-1", { type: "user", userId: "user-1" })).resolves.toEqual([
       ownTask,
     ]);
+  });
+
+  it("no registra actividad si no puede crear la tarea", async () => {
+    const { service, taskRepository, activityLogService } = makeService([]);
+
+    await expect(
+      service.create("event-1", { type: "user", userId: "user-1" }, " "),
+    ).rejects.toBeInstanceOf(ValidationError);
+
+    expect(taskRepository.create).not.toHaveBeenCalled();
+    expect(activityLogService.record).not.toHaveBeenCalled();
   });
 
   it("permite a un participante anónimo crear una tarea en su evento", async () => {

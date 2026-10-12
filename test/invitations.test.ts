@@ -46,14 +46,15 @@ describe("invitations", () => {
 
   it("creates an invitation URL with a unique opaque token", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValue(event as never);
-    vi.mocked(prisma.invitation.create).mockImplementation(async (args) => {
-      const data = args.data as { eventId: string; uniqueToken: string; expiresAt: Date | null };
+    vi.mocked(prisma.invitation.create).mockImplementation((async (args: {
+      data: { eventId: string; uniqueToken: string; expiresAt: Date | null };
+    }) => {
       return {
         id: "invitation-1",
-        ...data,
+        ...args.data,
         status: "active",
       } as never;
-    });
+    }) as never);
 
     const firstResponse = await request(app)
       .post(`/events/${eventId}/invitations`)
@@ -201,19 +202,15 @@ describe("invitations", () => {
 
     vi.mocked(prisma.invitation.create)
       .mockRejectedValueOnce({ code: "P2002" })
-      .mockImplementationOnce(async (args) => {
-        const data = args.data as {
-          eventId: string;
-          uniqueToken: string;
-          expiresAt: Date | null;
-        };
-
+      .mockImplementationOnce((async (args: {
+        data: { eventId: string; uniqueToken: string; expiresAt: Date | null };
+      }) => {
         return {
           id: "invitation-2",
-          ...data,
+          ...args.data,
           status: "active",
         } as never;
-      });
+      }) as never);
 
     const response = await request(app)
       .post(`/events/${eventId}/invitations`)

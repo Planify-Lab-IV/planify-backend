@@ -4,6 +4,7 @@ import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
 import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 import { env } from "../src/shared/config/env.js";
+import type { SimplifiedDebtRecord } from "../src/repositories/debt.repository.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
@@ -242,7 +243,7 @@ describe("POST /events/:eventId/debts/:debtId/settle", () => {
     updatedAt: new Date("2026-09-20T00:00:00.000Z"),
     participants,
   };
-  const pendingDebt = {
+  const pendingDebt: SimplifiedDebtRecord = {
     id: debtId,
     eventId,
     amountCents: 1500,
@@ -259,7 +260,7 @@ describe("POST /events/:eventId/debts/:debtId/settle", () => {
 
   function mockSuccessfulSettlement(
     debt = pendingDebt,
-    allDebts = [
+    allDebts: SimplifiedDebtRecord[] = [
       {
         ...pendingDebt,
         status: "settled" as const,
@@ -371,15 +372,16 @@ describe("POST /events/:eventId/debts/:debtId/settle", () => {
     expect(response.body.error).toBe("EVENT_UNAVAILABLE");
   });
 
-  it("permite saldar con una sesión anónima que representa al deudor", async () => {
+  it("permite saldar con una sesión anónima que representa al deudor en un evento confirmado", async () => {
     const anonymousDebt = {
       ...pendingDebt,
       debtor: { id: "participant-anonymous", username: "invitado" },
     };
     vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValueOnce(participants[2] as never);
+    const confirmedEvent = { ...event, status: "confirmed" };
     vi.mocked(prisma.event.findUnique)
-      .mockResolvedValueOnce(event as never)
-      .mockResolvedValueOnce(event as never);
+      .mockResolvedValueOnce(confirmedEvent as never)
+      .mockResolvedValueOnce(confirmedEvent as never);
     vi.mocked(prisma.simplifiedDebt.findUnique).mockResolvedValueOnce(anonymousDebt as never);
     vi.mocked(prisma.simplifiedDebt.updateMany).mockResolvedValueOnce({ count: 1 } as never);
     vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([
