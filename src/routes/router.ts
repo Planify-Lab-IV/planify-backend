@@ -21,7 +21,8 @@ router.use(balancesRouter);
 router.use(activityLogRouter);
 
 // Handler 404 para cualquier ruta no mapeada
-router.use((_req, _res, next) => {
+router.use((_req, res, next) => {
+  res.locals.isRouteNotFound = true;
   next(new RouteNotFoundError("Ruta no encontrada"));
 });
 
