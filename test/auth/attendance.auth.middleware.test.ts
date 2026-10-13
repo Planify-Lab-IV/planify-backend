@@ -42,6 +42,7 @@ function makeParticipantRepository(
   return {
     findById: vi.fn(async () => participant),
     findByEventId: vi.fn(),
+    existsAnonymousWithUsername: vi.fn(async () => false),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(),
     findAttendanceByEventIdAndUserId: vi.fn(),

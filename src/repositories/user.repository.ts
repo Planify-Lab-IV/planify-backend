@@ -18,6 +18,7 @@ export interface UserWithPassword extends User {
 
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
+  findByUsername(username: string): Promise<User | null>;
   findByEmail(email: string): Promise<User | null>;
   findPublicByIdentifier(identifier: string): Promise<User | null>;
   findByIdentifier(identifier: string): Promise<UserWithPassword | null>;
@@ -33,6 +34,14 @@ export const userRepository: UserRepository = {
   async findById(id: string): Promise<User | null> {
     const user = await prisma.user.findUnique({
       where: { id },
+      select: { id: true, name: true, username: true, email: true },
+    });
+    return user;
+  },
+
+  async findByUsername(username: string): Promise<User | null> {
+    const user = await prisma.user.findUnique({
+      where: { username },
       select: { id: true, name: true, username: true, email: true },
     });
     return user;

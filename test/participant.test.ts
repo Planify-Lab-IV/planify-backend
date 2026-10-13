@@ -16,6 +16,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     },
     eventParticipant: {
       findUnique: vi.fn(),
+      findFirst: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
@@ -23,6 +24,35 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     $queryRaw: vi.fn(),
   },
 }));
+
+describe("ParticipantRepository.existsAnonymousWithUsername", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("detecta un participante anónimo en un evento activo o confirmado sin distinguir mayúsculas", async () => {
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce({
+      id: "participant-1",
+    } as never);
+
+    await expect(participantRepository.existsAnonymousWithUsername("ANA")).resolves.toBe(true);
+
+    expect(prisma.eventParticipant.findFirst).toHaveBeenCalledWith({
+      where: {
+        isAnonymous: true,
+        username: { equals: "ANA", mode: "insensitive" },
+        event: { status: { in: ["active", "confirmed"] } },
+      },
+      select: { id: true },
+    });
+  });
+
+  it("ignora cuando no hay participantes anónimos en eventos disponibles", async () => {
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(null);
+
+    await expect(participantRepository.existsAnonymousWithUsername("ana")).resolves.toBe(false);
+  });
+});
 
 describe("POST /events/:eventId/participants/anonymous", () => {
   const eventId = "event-1";

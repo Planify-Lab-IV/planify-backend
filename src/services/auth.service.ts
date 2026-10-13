@@ -2,9 +2,15 @@
 // Coordina repositorio, hasher de contraseñas y emisor de tokens de sesión.
 
 import type { User, UserRepository } from "../repositories/user.repository.js";
+import type { ParticipantRepository } from "../repositories/participant.repository.js";
 import type { PasswordHasher } from "../infrastructure/security/password.hasher.js";
 import type { SessionTokenService } from "../infrastructure/security/session.token.service.js";
-import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
+import type { RegisterDTO } from "../validators/auth/register.validator.js";
+import {
+  RegistrationConflictError,
+  UnauthorizedError,
+  ValidationError,
+} from "../shared/errors/index.js";
 
 // --> Solo los datos necesarios para el login
 export interface LoginDTO {
@@ -20,11 +26,17 @@ export interface AuthResult {
 
 export interface AuthService {
   login(dto: LoginDTO): Promise<AuthResult>;
+  register(dto: RegisterDTO): Promise<AuthResult>;
   getCurrentUser(userId: string): Promise<User>;
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
 }
 
 export function createAuthService(
   userRepository: UserRepository,
+  participantRepository: ParticipantRepository,
   passwordHasher: PasswordHasher,
   sessionTokenService: SessionTokenService,
 ): AuthService {
@@ -38,7 +50,7 @@ export function createAuthService(
         throw new ValidationError("La contraseña es requerida");
       }
 
-      const cleanIdentifier = identifier.trim();
+      const cleanIdentifier = identifier.trim().toLowerCase();
 
       // --> Busca el usuario por email o username.
       const user = await userRepository.findByIdentifier(cleanIdentifier);
@@ -65,6 +77,45 @@ export function createAuthService(
         },
         token,
       };
+    },
+
+    async register(dto: RegisterDTO): Promise<AuthResult> {
+      const userWithUsername = await userRepository.findByUsername(dto.username);
+
+      if (
+        userWithUsername ||
+        (await participantRepository.existsAnonymousWithUsername(dto.username))
+      ) {
+        throw new RegistrationConflictError();
+      }
+
+      const userWithEmail = await userRepository.findByEmail(dto.email);
+
+      if (userWithEmail) {
+        throw new RegistrationConflictError();
+      }
+
+      const passwordHash = await passwordHasher.hash(dto.password);
+
+      try {
+        const user = await userRepository.create({
+          name: dto.name,
+          username: dto.username,
+          email: dto.email,
+          passwordHash,
+        });
+
+        return {
+          user,
+          token: sessionTokenService.sign(user.id),
+        };
+      } catch (error) {
+        if (isUniqueConstraintError(error)) {
+          throw new RegistrationConflictError();
+        }
+
+        throw error;
+      }
     },
 
     async getCurrentUser(userId: string): Promise<User> {

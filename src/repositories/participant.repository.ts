@@ -43,6 +43,8 @@ export interface ParticipantRepository {
 
   findByEventId(eventId: string): Promise<Participant[]>;
 
+  existsAnonymousWithUsername(username: string): Promise<boolean>;
+
   findByEventIdAndUsername(
     eventId: string,
     username: string,
@@ -91,6 +93,19 @@ export const participantRepository: ParticipantRepository = {
         isAnonymous: true,
       },
     });
+  },
+
+  async existsAnonymousWithUsername(username) {
+    const participant = await prisma.eventParticipant.findFirst({
+      where: {
+        isAnonymous: true,
+        username: { equals: username, mode: "insensitive" },
+        event: { status: { in: ["active", "confirmed"] } },
+      },
+      select: { id: true },
+    });
+
+    return participant !== null;
   },
 
   async findByEventIdAndUsername(eventId, username) {

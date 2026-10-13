@@ -41,6 +41,7 @@ function makeParticipantRepository(foundParticipant: Participant | null): Partic
   return {
     findById: vi.fn(async () => foundParticipant),
     findByEventId: vi.fn(),
+    existsAnonymousWithUsername: vi.fn(async () => false),
     findByEventIdAndUsername: vi.fn(),
     findAttendanceById: vi.fn(),
     findAttendanceByEventIdAndUserId: vi.fn(),
