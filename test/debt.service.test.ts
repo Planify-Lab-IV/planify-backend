@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Expense, ExpenseRepository } from "../src/repositories/expense.repository.js";
 import type {
+  EventBalanceRepository,
+  EventBalanceTransaction,
+} from "../src/repositories/event-balance.repository.js";
+import type {
   DebtForUserRecord,
   DebtRepository,
   DebtSettlementTransaction,
@@ -129,6 +133,26 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
   };
 }
 
+function createFakeEventBalanceRepository(
+  expenseRepository: ExpenseRepository,
+  debtRepository: DebtRepository,
+): EventBalanceRepository {
+  return {
+    withinLockedTransaction: vi.fn(async (eventId, operation) => {
+      const transaction: EventBalanceTransaction = {
+        findExpenses: () => expenseRepository.findByEventId(eventId),
+        findSettledDebts: () => debtRepository.findSettledByEventId(eventId),
+        replacePendingDebts: (debts) => debtRepository.replacePendingForEvent(eventId, debts),
+        findDebt: (debtId) => debtRepository.findById(debtId),
+        settleDebt: (debtId, settledAt) => debtRepository.markSettled(debtId, settledAt),
+        findDebts: () => debtRepository.findByEventId(eventId),
+      };
+
+      return operation(transaction);
+    }),
+  };
+}
+
 function makeDebtForUser(overrides: Partial<DebtForUserRecord> = {}): DebtForUserRecord {
   return {
     debtor: {
@@ -208,9 +232,9 @@ function createDebtService(
   event: Event | null = makeEvent(),
 ) {
   return createDebtServiceImplementation(
-    expenseRepository,
     debtRepository,
     createFakeEventRepository(event),
+    createFakeEventBalanceRepository(expenseRepository, debtRepository),
   );
 }
 
@@ -362,7 +386,15 @@ describe("DebtService.recalculateForEvent", () => {
 
     const expenseRepository = createFakeExpenseRepository(expenses);
     const debtRepository = createFakeDebtRepository();
-    const service = createDebtService(expenseRepository, debtRepository);
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
+    const service = createDebtServiceImplementation(
+      debtRepository,
+      createFakeEventRepository(),
+      eventBalanceRepository,
+    );
 
     await service.recalculateForEvent(eventId);
 
@@ -370,6 +402,10 @@ describe("DebtService.recalculateForEvent", () => {
       { debtorParticipantId: "beto", creditorParticipantId: "ana", amountCents: 1000 },
       { debtorParticipantId: "cami", creditorParticipantId: "ana", amountCents: 1000 },
     ]);
+    expect(eventBalanceRepository.withinLockedTransaction).toHaveBeenCalledWith(
+      eventId,
+      expect.any(Function),
+    );
 
     const pendingRecords = debtRepository.getRecords().filter((d) => d.status === "pending");
     expect(pendingRecords).toHaveLength(2);

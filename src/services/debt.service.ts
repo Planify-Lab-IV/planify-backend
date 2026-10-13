@@ -1,4 +1,4 @@
-import type { Expense, ExpenseRepository } from "../repositories/expense.repository.js";
+import type { Expense } from "../repositories/expense.repository.js";
 import type {
   DebtForUserRecord,
   DebtParticipantForUserRecord,
@@ -25,6 +25,7 @@ import {
 } from "../shared/errors/index.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
 import type { Event, EventRepository } from "../repositories/event.repository.js";
+import type { EventBalanceRepository } from "../repositories/event-balance.repository.js";
 export { isPersonKey, parsePersonKey } from "../types/balance.js";
 
 export interface EventDebts {
@@ -58,9 +59,9 @@ export interface DebtService {
 }
 
 export function createDebtService(
-  expenseRepository: ExpenseRepository,
   debtRepository: DebtRepository,
   eventRepository: EventRepository,
+  eventBalanceRepository: EventBalanceRepository,
 ): DebtService {
   function resolveActorParticipantId(
     event: Event,
@@ -110,15 +111,17 @@ export function createDebtService(
 
   return {
     async recalculateForEvent(eventId: string): Promise<void> {
-      const [expenses, settledDebts] = await Promise.all([
-        expenseRepository.findByEventId(eventId),
-        debtRepository.findSettledByEventId(eventId),
-      ]);
+      await eventBalanceRepository.withinLockedTransaction(eventId, async (transaction) => {
+        const [expenses, settledDebts] = await Promise.all([
+          transaction.findExpenses(),
+          transaction.findSettledDebts(),
+        ]);
 
-      const participantAmounts = buildParticipantAmounts(expenses, settledDebts);
-      const simplifiedDebts = simplifyDebts(participantAmounts);
+        const participantAmounts = buildParticipantAmounts(expenses, settledDebts);
+        const simplifiedDebts = simplifyDebts(participantAmounts);
 
-      await debtRepository.replacePendingForEvent(eventId, simplifiedDebts);
+        await transaction.replacePendingDebts(simplifiedDebts);
+      });
     },
 
     async listEventDebts(eventId, actor) {
