@@ -7,6 +7,7 @@ import { participantRepository } from "../repositories/participant.repository.js
 import { createActivityLogService } from "../services/activity-log.service.js";
 import { env } from "../shared/config/env.js";
 import { createAttendanceAuthMiddleware } from "../shared/middlewares/attendance.auth.middleware.js";
+import { createAuthMiddleware } from "../shared/middlewares/auth.middleware.js";
 
 const router = Router();
 
@@ -16,6 +17,7 @@ const requireAttendanceAuth = createAttendanceAuthMiddleware(
   participantRepository,
   eventRepository,
 );
+const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService);
 const activityLogService = createActivityLogService(
   activityLogRepository,
   eventRepository,
@@ -25,6 +27,14 @@ const activityLogController = createActivityLogController(activityLogService);
 
 router.get("/events/:eventId/activity-log", requireAttendanceAuth, (req, res, next) =>
   activityLogController.list(req, res, next),
+);
+
+router.post("/events/:eventId/activity-log/read", requireAttendanceAuth, (req, res, next) =>
+  activityLogController.markAsRead(req, res, next),
+);
+
+router.get("/me/unread-counts", requireAuthenticatedUser, (req, res, next) =>
+  activityLogController.getUnreadCounts(req, res, next),
 );
 
 export default router;

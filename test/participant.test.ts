@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import bcrypt from "bcrypt";
+import type { Prisma } from "@prisma/client";
 
 import app from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
@@ -413,6 +414,70 @@ describe("ParticipantRepository attendance operations", () => {
         isOrganizer: true,
         attendanceState: true,
       },
+    });
+  });
+
+  it("conserva la marca más reciente si una lectura anterior termina después", async () => {
+    const olderReadAt = new Date("2026-01-01T10:00:00Z");
+    const newerReadAt = new Date("2026-01-01T10:01:00Z");
+    let persistedLastReadAt: Date | null = null;
+    let notifyOlderWriteStarted: (() => void) | undefined;
+    let releaseOlderWrite: (() => void) | undefined;
+    const olderWriteStarted = new Promise<void>((resolve) => {
+      notifyOlderWriteStarted = resolve;
+    });
+    const releaseOlderWritePromise = new Promise<void>((resolve) => {
+      releaseOlderWrite = resolve;
+    });
+
+    vi.mocked(prisma.eventParticipant.updateMany).mockImplementation(((
+      args: Prisma.EventParticipantUpdateManyArgs,
+    ) => {
+      const readAt = args.data.lastReadAt;
+
+      if (!(readAt instanceof Date)) {
+        return Promise.reject(new Error("Se esperaba una fecha de lectura"));
+      }
+
+      if (readAt.getTime() === olderReadAt.getTime()) {
+        notifyOlderWriteStarted?.();
+        return releaseOlderWritePromise.then(() => applyReadAt(readAt));
+      }
+
+      return applyReadAt(readAt);
+    }) as never);
+
+    function applyReadAt(readAt: Date) {
+      const canUpdate =
+        persistedLastReadAt === null || persistedLastReadAt.getTime() < readAt.getTime();
+
+      if (canUpdate) {
+        persistedLastReadAt = readAt;
+      }
+
+      return Promise.resolve({ count: canUpdate ? 1 : 0 } as never);
+    }
+
+    const olderRead = participantRepository.updateLastReadAt("participant-1", olderReadAt);
+    await olderWriteStarted;
+    await participantRepository.updateLastReadAt("participant-1", newerReadAt);
+    releaseOlderWrite?.();
+    await olderRead;
+
+    expect(persistedLastReadAt).toEqual(newerReadAt);
+    expect(prisma.eventParticipant.updateMany).toHaveBeenNthCalledWith(1, {
+      where: {
+        id: "participant-1",
+        OR: [{ lastReadAt: null }, { lastReadAt: { lt: olderReadAt } }],
+      },
+      data: { lastReadAt: olderReadAt },
+    });
+    expect(prisma.eventParticipant.updateMany).toHaveBeenNthCalledWith(2, {
+      where: {
+        id: "participant-1",
+        OR: [{ lastReadAt: null }, { lastReadAt: { lt: newerReadAt } }],
+      },
+      data: { lastReadAt: newerReadAt },
     });
   });
 });
