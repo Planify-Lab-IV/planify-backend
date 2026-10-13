@@ -462,3 +462,32 @@ describe("DebtRepository debt settlement transaction", () => {
     });
   });
 });
+
+describe("DebtRepository event debt transaction", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("bloquea el evento antes de ejecutar la operación", async () => {
+    const callOrder: string[] = [];
+    const queryRaw = vi.fn(async () => {
+      callOrder.push("lock");
+      return [{ id: "event-1" }];
+    });
+
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) => callback({ $queryRaw: queryRaw })) as never);
+
+    await expect(
+      debtRepository.withinEventDebtTransaction("event-1", async () => {
+        callOrder.push("operation");
+        return "done";
+      }),
+    ).resolves.toBe("done");
+
+    expect(prisma.$transaction).toHaveBeenCalledOnce();
+    expect(queryRaw).toHaveBeenCalledOnce();
+    expect(callOrder).toEqual(["lock", "operation"]);
+  });
+});

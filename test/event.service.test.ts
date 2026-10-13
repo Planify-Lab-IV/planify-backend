@@ -117,6 +117,7 @@ const unusedDebtRepository: DebtRepository = {
   markSettled: vi.fn(),
   findByUserId: vi.fn(),
   withinTransaction: vi.fn(),
+  withinEventDebtTransaction: vi.fn(),
   replacePendingForEvent: vi.fn(),
 };
 

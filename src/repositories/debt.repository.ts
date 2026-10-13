@@ -53,6 +53,11 @@ export interface DebtSettlementTransaction {
   markManySettled(ids: string[], settledAt: Date): Promise<number>;
 }
 
+// Esta interfaz crecerá con las operaciones que participen del recálculo y el
+// saldado por evento. Mantenerla separada evita exponer el cliente de Prisma a
+// la capa de servicios.
+export type EventDebtTransaction = Record<string, never>;
+
 export interface DebtRepository {
   findById(debtId: string): Promise<SimplifiedDebtRecord | null>;
   findByEventId(eventId: string): Promise<SimplifiedDebtRecord[]>;
@@ -62,6 +67,10 @@ export interface DebtRepository {
   replacePendingForEvent(eventId: string, debts: SimplifiedDebt[]): Promise<void>;
   withinTransaction<T>(
     operation: (transaction: DebtSettlementTransaction) => Promise<T>,
+  ): Promise<T>;
+  withinEventDebtTransaction<T>(
+    eventId: string,
+    operation: (transaction: EventDebtTransaction) => Promise<T>,
   ): Promise<T>;
 }
 
@@ -119,6 +128,10 @@ function createDebtSettlementTransaction(
       return debts.map((debt) => debt.eventId);
     },
   };
+}
+
+function createEventDebtTransaction(): EventDebtTransaction {
+  return {};
 }
 
 export const debtRepository: DebtRepository = {
@@ -259,5 +272,20 @@ export const debtRepository: DebtRepository = {
     // operaciones entregadas al callback usan ese mismo cliente, por lo que se
     // confirman juntas o se revierten juntas si alguna falla.
     return prisma.$transaction((tx) => operation(createDebtSettlementTransaction(tx)));
+  },
+
+  async withinEventDebtTransaction(eventId, operation) {
+    return prisma.$transaction(async (tx) => {
+      // El bloqueo vive en PostgreSQL, por lo que también coordina requests
+      // atendidos por procesos o instancias distintas de la aplicación.
+      await tx.$queryRaw`
+        SELECT id
+        FROM evento
+        WHERE id = ${eventId}
+        FOR UPDATE
+      `;
+
+      return operation(createEventDebtTransaction());
+    });
   },
 };

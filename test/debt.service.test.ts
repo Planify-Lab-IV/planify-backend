@@ -110,6 +110,7 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
       return 1;
     }),
     withinTransaction: vi.fn(),
+    withinEventDebtTransaction: vi.fn(),
     replacePendingForEvent: vi.fn(async (eventId, debts) => {
       records = records.filter((d) => !(d.eventId === eventId && d.status === "pending"));
       records.push(
