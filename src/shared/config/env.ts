@@ -14,6 +14,7 @@ const envSchema = z.object({
   // --> Valida que la direccion sea un string y defaultea
   JWT_SECRET: z.string().min(32),
   // --> Valida que la key JWT sea de al menos 32 caracteres como string
+  INTERNAL_KPIS_TOKEN: z.string().min(32).optional(),
 });
 
 export const env = envSchema.parse(process.env);
