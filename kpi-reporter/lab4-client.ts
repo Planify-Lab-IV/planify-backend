@@ -11,7 +11,7 @@ export interface Lab4ClientOptions {
 }
 
 export interface Lab4Client {
-  sendMeasurements(measurements: readonly KpiMeasurement[]): Promise<void>;
+  sendMeasurements(measurements: readonly KpiMeasurement[]): Promise<number>;
   verifyMeasurements(measurements: readonly KpiMeasurement[]): Promise<VerificationResult>;
 }
 
@@ -39,7 +39,7 @@ export function createLab4Client({
   validateConfiguration({ supabaseUrl, supabasePublishableKey, projectKey });
 
   return {
-    async sendMeasurements(measurements): Promise<void> {
+    async sendMeasurements(measurements): Promise<number> {
       const url = createMeasurementsUrl(supabaseUrl);
       url.searchParams.set("on_conflict", "project_id,kpi_id,date,env");
 
@@ -57,6 +57,8 @@ export function createLab4Client({
       if (!response.ok) {
         throw await createLab4ResponseError("enviar las mediciones", response);
       }
+
+      return response.status;
     },
 
     async verifyMeasurements(measurements): Promise<VerificationResult> {

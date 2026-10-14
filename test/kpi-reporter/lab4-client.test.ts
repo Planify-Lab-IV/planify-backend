@@ -27,7 +27,7 @@ describe("cliente de Lab4 KPIs", () => {
     const fetchImpl = createFetch(new Response(null, { status: 201 }));
     const client = createClient(fetchImpl);
 
-    await expect(client.sendMeasurements(measurements)).resolves.toBeUndefined();
+    await expect(client.sendMeasurements(measurements)).resolves.toBe(201);
 
     expect(fetchImpl).toHaveBeenCalledWith(
       new URL(
