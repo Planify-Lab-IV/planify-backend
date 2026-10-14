@@ -1,0 +1,144 @@
+import type {
+  AvailabilityHeatmapSlot,
+  AvailabilityRepository,
+  AvailabilitySlotInput,
+} from "../repositories/availability.repository.js";
+import type { EventRepository } from "../repositories/event.repository.js";
+import type {
+  AttendanceParticipant,
+  ParticipantRepository,
+} from "../repositories/participant.repository.js";
+import type { ActivityLogService } from "./activity-log.service.js";
+import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
+import { ForbiddenError, NotFoundError, ValidationError } from "../shared/errors/index.js";
+import { validateEventId } from "../shared/event-id.js";
+
+export interface AvailabilityHeatmap {
+  totalParticipants: number;
+  slots: AvailabilityHeatmapSlot[];
+}
+
+export interface AvailabilityService {
+  save(eventId: string, actor: AttendanceActor, slots: AvailabilitySlotInput[]): Promise<void>;
+  load(eventId: string, actor: AttendanceActor): Promise<AvailabilitySlotInput[]>;
+  heatmap(userId: string, eventId: string): Promise<AvailabilityHeatmap>;
+}
+
+function validateSlots(slots: AvailabilitySlotInput[]): void {
+  // --> Valida bloques de horarios
+  if (!Array.isArray(slots)) {
+    // --> Valida que realmente llegue el array de slots y no un json u otra cosa
+    throw new ValidationError("Los slots de disponibilidad son inválidos");
+  }
+
+  const seenSlots = new Set<string>();
+
+  for (const slot of slots) {
+    if (
+      !slot ||
+      typeof slot.weekDay !== "number" ||
+      !Number.isInteger(slot.weekDay) || // --> 2.5 no aceptado por ejemplo
+      slot.weekDay < 0 ||
+      slot.weekDay > 6 ||
+      typeof slot.hourBlock !== "number" ||
+      !Number.isInteger(slot.hourBlock) ||
+      slot.hourBlock < 0 ||
+      slot.hourBlock > 23
+    ) {
+      throw new ValidationError("Los slots de disponibilidad son inválidos");
+    }
+
+    const slotKey = `${slot.weekDay}:${slot.hourBlock}`;
+    if (seenSlots.has(slotKey)) {
+      throw new ValidationError("Los slots de disponibilidad no pueden repetirse");
+    }
+    seenSlots.add(slotKey);
+  }
+}
+
+export function createAvailabilityService(
+  eventRepository: EventRepository,
+  participantRepository: ParticipantRepository,
+  availabilityRepository: AvailabilityRepository,
+  activityLogService: ActivityLogService,
+): AvailabilityService {
+  async function resolveParticipant(
+    eventId: string,
+    actor: AttendanceActor,
+  ): Promise<AttendanceParticipant> {
+    const participant =
+      actor.type === "user"
+        ? await participantRepository.findAttendanceByEventIdAndUserId(eventId, actor.userId)
+        : await participantRepository.findAttendanceById(actor.participantId);
+
+    if (
+      !participant ||
+      participant.eventId !== eventId ||
+      (actor.type === "anonymousParticipant" &&
+        (!participant.isAnonymous || actor.eventId !== eventId))
+    ) {
+      throw new NotFoundError("Participante no encontrado");
+    }
+
+    return participant;
+  }
+
+  return {
+    async save(eventId, actor, slots) {
+      validateEventId(eventId);
+      validateSlots(slots);
+
+      const event = await eventRepository.findById(eventId);
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+      if (event.status === "cancelled") {
+        throw new ValidationError("No se puede cargar disponibilidad en un evento cancelado");
+      }
+
+      const participant = await resolveParticipant(eventId, actor);
+      await availabilityRepository.replaceForParticipant(eventId, participant.id, slots);
+      await activityLogService.record({
+        eventId,
+        type: "availability_updated",
+        actorParticipantId: participant.id,
+        payload: { slotCount: slots.length },
+      });
+    },
+
+    async load(eventId, actor) {
+      validateEventId(eventId);
+
+      const event = await eventRepository.findById(eventId);
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+
+      const participant = await resolveParticipant(eventId, actor);
+      const slots = await availabilityRepository.findForParticipant(eventId, participant.id);
+
+      return slots.map(({ weekDay, hourBlock }) => ({ weekDay, hourBlock }));
+    },
+
+    async heatmap(userId, eventId) {
+      validateEventId(eventId);
+
+      const event = await eventRepository.findById(eventId);
+      if (!event) {
+        throw new NotFoundError("Evento no encontrado");
+      }
+      if (event.organizerId !== userId) {
+        throw new ForbiddenError(
+          "Solo el organizador puede consultar el heatmap de disponibilidad",
+        );
+      }
+
+      const slots = await availabilityRepository.findHeatmapByEventId(eventId);
+
+      return {
+        totalParticipants: event.participants.length,
+        slots,
+      };
+    },
+  };
+}

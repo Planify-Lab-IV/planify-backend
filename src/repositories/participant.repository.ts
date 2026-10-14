@@ -1,0 +1,237 @@
+import { prisma } from "../infrastructure/prisma.js";
+import type { AttendanceState } from "@prisma/client";
+
+export class ParticipantAlreadyExistsError extends Error {
+  constructor() {
+    super("Ya existe un participante con ese nombre en el evento");
+    this.name = "ParticipantAlreadyExistsError";
+  } // --> Error interno, no tiene porque estar centralizado
+}
+
+export interface Participant {
+  id: string;
+  eventId: string;
+  username: string;
+  isAnonymous: boolean;
+}
+
+// --> Solo se usa cuando el sistema necesita validar el PIN de ingreso
+export interface ParticipantWithPinHash extends Participant {
+  pinHash: string | null;
+}
+
+// --> Proyeccion especifica para el flujo de asistencia
+export interface AttendanceParticipant {
+  id: string;
+  eventId: string;
+  userId: string | null;
+  username: string;
+  isAnonymous: boolean;
+  isOrganizer: boolean;
+  attendanceState: AttendanceState;
+}
+
+export interface ParticipantReadState {
+  participantId: string;
+  eventId: string;
+  groupId: string;
+  lastReadAt: Date | null;
+}
+
+export interface ParticipantRepository {
+  findById(id: string): Promise<Participant | null>;
+
+  findByEventId(eventId: string): Promise<Participant[]>;
+
+  existsAnonymousWithUsername(username: string): Promise<boolean>;
+
+  findByEventIdAndUsername(
+    eventId: string,
+    username: string,
+  ): Promise<ParticipantWithPinHash | null>;
+
+  findAttendanceById(id: string): Promise<AttendanceParticipant | null>;
+
+  findAttendanceByEventIdAndUserId(
+    eventId: string,
+    userId: string,
+  ): Promise<AttendanceParticipant | null>;
+
+  createAnonymous(data: {
+    eventId: string;
+    username: string;
+    pinHash: string;
+  }): Promise<Participant>;
+
+  updateAttendance(id: string, state: AttendanceState): Promise<AttendanceParticipant>;
+
+  updateLastReadAt(id: string, date: Date): Promise<void>;
+
+  findParticipationsByUserId(userId: string): Promise<ParticipantReadState[]>;
+}
+
+export const participantRepository: ParticipantRepository = {
+  async findById(id) {
+    return prisma.eventParticipant.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        eventId: true,
+        username: true,
+        isAnonymous: true,
+      },
+    });
+  },
+
+  async findByEventId(eventId) {
+    return prisma.eventParticipant.findMany({
+      where: { eventId },
+      select: {
+        id: true,
+        eventId: true,
+        username: true,
+        isAnonymous: true,
+      },
+    });
+  },
+
+  async existsAnonymousWithUsername(username) {
+    const participant = await prisma.eventParticipant.findFirst({
+      where: {
+        isAnonymous: true,
+        username: { equals: username, mode: "insensitive" },
+        event: { status: { in: ["active", "confirmed"] } },
+      },
+      select: { id: true },
+    });
+
+    return participant !== null;
+  },
+
+  async findByEventIdAndUsername(eventId, username) {
+    return prisma.eventParticipant.findUnique({
+      where: {
+        eventId_username: { eventId, username },
+      },
+      select: {
+        id: true,
+        eventId: true,
+        username: true,
+        isAnonymous: true,
+        pinHash: true,
+      },
+    });
+  },
+
+  async findAttendanceById(id) {
+    return prisma.eventParticipant.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
+      },
+    });
+  },
+
+  async findAttendanceByEventIdAndUserId(eventId, userId) {
+    return prisma.eventParticipant.findFirst({
+      where: { eventId, userId },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
+      },
+    });
+  },
+
+  async createAnonymous({ eventId, username, pinHash }) {
+    try {
+      return await prisma.eventParticipant.create({
+        data: {
+          eventId,
+          username,
+          pinHash,
+          isAnonymous: true,
+          isOrganizer: false,
+        },
+        select: {
+          id: true,
+          eventId: true,
+          username: true,
+          isAnonymous: true,
+          // --> No exponemos el pinHash al crear un participante no registrado, no circula fuera de la
+          // operacion directa de crear
+        },
+      });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === "P2002"
+      ) {
+        throw new ParticipantAlreadyExistsError();
+      }
+
+      throw error;
+    }
+  },
+
+  async updateAttendance(id, state) {
+    return prisma.eventParticipant.update({
+      where: { id },
+      data: { attendanceState: state },
+      select: {
+        id: true,
+        eventId: true,
+        userId: true,
+        username: true,
+        isAnonymous: true,
+        isOrganizer: true,
+        attendanceState: true,
+      },
+    });
+  },
+
+  async updateLastReadAt(id, date) {
+    await prisma.eventParticipant.updateMany({
+      where: {
+        id,
+        OR: [{ lastReadAt: null }, { lastReadAt: { lt: date } }],
+      },
+      data: { lastReadAt: date },
+    });
+  },
+
+  async findParticipationsByUserId(userId) {
+    const participations = await prisma.eventParticipant.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        eventId: true,
+        lastReadAt: true,
+        event: {
+          select: {
+            groupId: true,
+          },
+        },
+      },
+    });
+
+    return participations.map(({ id, eventId, lastReadAt, event }) => ({
+      participantId: id,
+      eventId,
+      groupId: event.groupId,
+      lastReadAt,
+    }));
+  },
+};

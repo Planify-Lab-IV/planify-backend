@@ -1,0 +1,28 @@
+// Punto único de entrada de todas las rutas de la aplicación
+
+import { Router } from "express";
+import healthRouter from "./health.js";
+import authRouter from "./auth.js";
+import eventsRouter from "./events.js";
+import groupsRouter from "./groups.js";
+import tasksRouter from "./tasks.js";
+import balancesRouter from "./balances.js";
+import activityLogRouter from "./activity-log.js";
+import { RouteNotFoundError } from "../shared/errors/index.js";
+
+const router = Router();
+
+router.use(healthRouter);
+router.use(authRouter);
+router.use(eventsRouter);
+router.use(groupsRouter);
+router.use(tasksRouter);
+router.use(balancesRouter);
+router.use(activityLogRouter);
+
+// Handler 404 para cualquier ruta no mapeada
+router.use((_req, _res, next) => {
+  next(new RouteNotFoundError("Ruta no encontrada"));
+});
+
+export default router;

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+coverage/
+.DS_Store
+.idea/
+.vscode/
+/src/generated/prisma
+test/*.js
+test/*.js.map
+test/*.d.ts.map
+.agents

@@ -1,0 +1,250 @@
+// Schema referencial de prisma a la db
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String @id @default(uuid())
+  name         String @map("nombre")
+  username     String @unique
+  email        String @unique
+  passwordHash String @map("password_hash")
+
+  groupMemberships    GroupMember[]
+  eventParticipations EventParticipant[]
+  organizedEvents     Event[]            @relation("EventOrganizer")
+
+  @@map("usuario")
+}
+
+model GroupMember {
+  userId  String @map("usuario_id")
+  groupId String @map("grupo_id")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([userId, groupId])
+  @@index([groupId])
+  @@map("miembro_grupo")
+}
+
+model Group {
+  id   String @id @default(uuid())
+  name String @map("nombre")
+
+  events  Event[]
+  members GroupMember[]
+
+  @@map("grupo")
+}
+
+model Event {
+  id      String @id @default(uuid())
+  groupId String @map("grupo_id")
+  name    String @map("nombre")
+  status  String @default("active") @map("estado")
+
+  organizerId    String    @map("creado_por_usuario_id")
+  location       String    @map("lugar_texto")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  startDateTime  DateTime? @map("start_date_time")
+  expensesClosed Boolean   @default(false) @map("gastos_cerrados")
+
+  group           Group              @relation(fields: [groupId], references: [id])
+  organizer       User               @relation("EventOrganizer", fields: [organizerId], references: [id])
+  participants    EventParticipant[]
+  invitations     Invitation[]
+  expense         Expense[]
+  simplifiedDebts SimplifiedDebt[]
+  Task            Task[]
+  activityLogs    ActivityLog[]
+
+  @@map("evento")
+}
+
+model Invitation {
+  id          String    @id @default(uuid())
+  eventId     String    @map("evento_id")
+  uniqueToken String    @unique @map("token_unico")
+  expiresAt   DateTime? @map("expira_en")
+  status      String    @default("active") @map("estado")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@map("invitaciones")
+}
+
+model EventParticipant {
+  id          String    @id @default(uuid())
+  eventId     String    @map("evento_id")
+  userId      String?   @map("usuario_id")
+  username    String
+  isAnonymous Boolean   @default(false) @map("es_anonimo")
+  isOrganizer Boolean   @default(false) @map("es_organizador")
+  pinHash     String?   @map("pin_hash")
+  lastReadAt  DateTime? @map("ultima_lectura_at")
+
+  event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  attendanceState   AttendanceState    @default(not_confirmed) @map("attendance_state")
+  availabilitySlots AvailabilitySlot[]
+  Expense           Expense[]
+  ExpensePayer      ExpensePayer[]
+  ExpenseDebtor     ExpenseDebtor[]
+  debtsAsDebtor     SimplifiedDebt[]   @relation("DebtDebtor")
+  debtsAsCreditor   SimplifiedDebt[]   @relation("DebtCreditor")
+  assignedTasks     Task[]             @relation("TaskAssignee")
+  createdTasks      Task[]             @relation("TaskCreator")
+  activityLogs      ActivityLog[]      @relation("ActivityLogActor")
+
+  @@unique([id, eventId])
+  @@unique([eventId, username])
+  @@index([eventId])
+  @@index([userId])
+  @@map("participante")
+}
+
+model AvailabilitySlot {
+  id            String @id @default(uuid())
+  participantId String @map("participante_id")
+  eventId       String @map("evento_id")
+  weekDay       Int    @map("week_day")
+  hourBlock     Int    @map("hour_block")
+
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId], onDelete: Cascade)
+
+  @@unique([participantId, eventId, weekDay, hourBlock])
+  @@index([participantId, eventId])
+  @@map("availability_slot")
+}
+
+enum AttendanceState {
+  not_confirmed
+  confirmed
+  rejected
+}
+
+model Expense {
+  id                     String   @id @default(uuid())
+  eventId                String   @map("evento_id")
+  description            String   @map("descripcion")
+  totalAmountCents       Int      @map("monto_total_centavos")
+  createdByParticipantId String   @map("creado_por_participante_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  event     Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdBy EventParticipant @relation(fields: [createdByParticipantId, eventId], references: [id, eventId])
+  payers    ExpensePayer[]
+  debtors   ExpenseDebtor[]
+
+  @@unique([id, eventId])
+  @@index([eventId])
+  @@map("gasto")
+}
+
+model ExpensePayer {
+  expenseId     String @map("gasto_id")
+  participantId String @map("participante_id")
+  amountCents   Int    @map("monto_centavos")
+  eventId       String @map("evento_id")
+
+  expense     Expense          @relation(fields: [expenseId, eventId], references: [id, eventId], onDelete: Cascade)
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId])
+
+  @@id([expenseId, participantId])
+  @@index([participantId, eventId])
+  @@map("aportante_gasto")
+}
+
+model ExpenseDebtor {
+  expenseId     String @map("gasto_id")
+  participantId String @map("participante_id")
+  amountCents   Int    @map("monto_centavos")
+  eventId       String @map("evento_id")
+
+  expense     Expense          @relation(fields: [expenseId, eventId], references: [id, eventId], onDelete: Cascade)
+  participant EventParticipant @relation(fields: [participantId, eventId], references: [id, eventId])
+
+  @@id([expenseId, participantId])
+  @@index([participantId, eventId])
+  @@map("deudor_gasto")
+}
+
+enum DebtStatus {
+  pending
+  settled
+}
+
+model SimplifiedDebt {
+  id                    String     @id @default(uuid())
+  eventId               String     @map("evento_id")
+  debtorParticipantId   String     @map("deudor_participante_id")
+  creditorParticipantId String     @map("acreedor_participante_id")
+  amountCents           Int        @map("monto_centavos")
+  status                DebtStatus @default(pending) @map("estado")
+  settledAt             DateTime?  @map("saldado_en")
+  createdAt             DateTime   @default(now()) @map("created_at")
+
+  event    Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  debtor   EventParticipant @relation("DebtDebtor", fields: [debtorParticipantId, eventId], references: [id, eventId])
+  creditor EventParticipant @relation("DebtCreditor", fields: [creditorParticipantId, eventId], references: [id, eventId])
+
+  @@index([eventId])
+  @@index([debtorParticipantId])
+  @@index([creditorParticipantId])
+  @@map("deuda_simplificada")
+}
+
+enum TaskStatus {
+  unassigned
+  pending
+  completed
+}
+
+model Task {
+  id                      String     @id @default(uuid())
+  eventId                 String     @map("evento_id")
+  title                   String     @map("titulo")
+  status                  TaskStatus @default(unassigned) @map("estado")
+  assignedToParticipantId String?    @map("asignado_a_participante_id")
+  createdByParticipantId  String     @map("creado_por_participante_id")
+  createdAt               DateTime   @default(now()) @map("created_at")
+  updatedAt               DateTime   @updatedAt @map("updated_at")
+
+  event      Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  assignedTo EventParticipant? @relation("TaskAssignee", fields: [assignedToParticipantId, eventId], references: [id, eventId])
+  createdBy  EventParticipant  @relation("TaskCreator", fields: [createdByParticipantId, eventId], references: [id, eventId])
+
+  @@index([eventId])
+  @@map("tarea")
+}
+
+enum ActivityType {
+  task_created
+  availability_updated
+  expense_created
+  schedule_confirmed
+}
+
+model ActivityLog {
+  id                 String       @id @default(uuid())
+  eventId            String       @map("evento_id")
+  type               ActivityType @map("tipo")
+  actorParticipantId String       @map("actor_participante_id")
+  payload            Json?
+  createdAt          DateTime     @default(now()) @map("created_at")
+
+  event Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  actor EventParticipant @relation("ActivityLogActor", fields: [actorParticipantId, eventId], references: [id, eventId])
+
+  @@index([eventId, createdAt])
+  @@map("log_actividad")
+}

@@ -1,0 +1,374 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import request from "supertest";
+import app from "../src/app.js";
+import { prisma } from "../src/infrastructure/prisma.js";
+import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
+import { env } from "../src/shared/config/env.js";
+
+vi.mock("../src/infrastructure/prisma.js", () => ({
+  prisma: {
+    event: {
+      findUnique: vi.fn(),
+      update: vi.fn(),
+    },
+    eventParticipant: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      findFirst: vi.fn(),
+    },
+    expense: {
+      create: vi.fn(),
+      findMany: vi.fn(),
+    },
+    simplifiedDebt: {
+      findMany: vi.fn(),
+      deleteMany: vi.fn(),
+      createMany: vi.fn(),
+    },
+    activityLog: { create: vi.fn(), findMany: vi.fn() },
+    $transaction: vi.fn(),
+  },
+}));
+
+describe("POST /events/:eventId/expenses", () => {
+  const eventId = "event-1";
+  const userId = "user-1";
+  const token = createSessionTokenService(env.JWT_SECRET).sign(userId);
+  const body = {
+    description: "Cena",
+    totalAmountCents: 4500,
+    payers: [
+      { participantId: "participant-ana", amountCents: 3000 },
+      { participantId: "participant-beto", amountCents: 1500 },
+    ],
+    debtors: [
+      { participantId: "participant-ana", amountCents: 1500 },
+      { participantId: "participant-beto", amountCents: 1500 },
+      { participantId: "participant-cami", amountCents: 1500 },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("crea un gasto para un participante registrado", async () => {
+    const participants = [
+      { id: "participant-ana", eventId, username: "ana", isAnonymous: false },
+      { id: "participant-beto", eventId, username: "beto", isAnonymous: false },
+      { id: "participant-cami", eventId, username: "cami", isAnonymous: false },
+    ];
+    const createdAt = new Date("2026-09-20T00:00:00.000Z");
+    const createdExpense = {
+      id: "expense-1",
+      eventId,
+      description: body.description,
+      totalAmountCents: body.totalAmountCents,
+      createdByParticipantId: "participant-ana",
+      createdAt,
+      payers: body.payers.map((payer) => ({ ...payer, expenseId: "expense-1" })),
+      debtors: body.debtors.map((debtor) => ({ ...debtor, expenseId: "expense-1" })),
+    };
+
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "active",
+      participants: [],
+    } as never);
+    vi.mocked(prisma.eventParticipant.findMany).mockResolvedValueOnce(participants as never);
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce({
+      ...participants[0],
+      userId,
+      isOrganizer: false,
+      attendanceState: "not_confirmed",
+    } as never);
+    vi.mocked(prisma.expense.create).mockResolvedValueOnce(createdExpense as never);
+    vi.mocked(prisma.expense.findMany).mockResolvedValueOnce([createdExpense] as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([] as never);
+    vi.mocked(prisma.simplifiedDebt.deleteMany).mockResolvedValueOnce({ count: 0 } as never);
+    vi.mocked(prisma.simplifiedDebt.createMany).mockResolvedValueOnce({ count: 2 } as never);
+    const lockEvent = vi.fn().mockResolvedValue([]);
+
+    vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
+      callback({
+        $queryRaw: lockEvent,
+        expense: { create: prisma.expense.create, findMany: prisma.expense.findMany },
+        simplifiedDebt: {
+          findMany: prisma.simplifiedDebt.findMany,
+          deleteMany: prisma.simplifiedDebt.deleteMany,
+          createMany: prisma.simplifiedDebt.createMany,
+        },
+      })) as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      ...createdExpense,
+      createdAt: createdAt.toJSON(),
+      payers: body.payers,
+      debtors: body.debtors,
+    });
+    expect(lockEvent).toHaveBeenCalledOnce();
+  });
+
+  it("rechaza un body inválido antes de consultar persistencia", async () => {
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ ...body, totalAmountCents: 0 });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("INVALID_DATA");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("requiere una credencial válida", async () => {
+    const response = await request(app).post(`/events/${eventId}/expenses`).send(body);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+  });
+  it("devuelve 404 si el evento no existe", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(404);
+    expect(response.body.error).toBe("NOT_FOUND");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 409 si el evento esta cancelado", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "cancelled",
+      participants: [],
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EVENT_UNAVAILABLE");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 409 si los gastos del evento están cerrados", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "active",
+      expensesClosed: true,
+      participants: [],
+    } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EXPENSES_CLOSED");
+    expect(prisma.eventParticipant.findFirst).not.toHaveBeenCalled();
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("impide crear gastos después de que el organizador los cierra", async () => {
+    const openEvent = {
+      id: eventId,
+      name: "Cena",
+      location: "Casa de Ana",
+      groupId: "group-1",
+      organizerId: userId,
+      status: "active",
+      expensesClosed: false,
+      startDateTime: null,
+      createdAt: new Date("2026-09-20T00:00:00.000Z"),
+      updatedAt: new Date("2026-09-20T00:00:00.000Z"),
+      participants: [],
+    };
+    const closedEvent = { ...openEvent, expensesClosed: true };
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce(openEvent as never)
+      .mockResolvedValueOnce(closedEvent as never);
+    vi.mocked(prisma.event.update).mockResolvedValueOnce(closedEvent as never);
+
+    const closeResponse = await request(app)
+      .post(`/events/${eventId}/expenses/close`)
+      .set("Authorization", `Bearer ${token}`);
+    const expenseResponse = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(closeResponse.status).toBe(200);
+    expect(closeResponse.body.expensesClosed).toBe(true);
+    expect(expenseResponse.status).toBe(409);
+    expect(expenseResponse.body.error).toBe("EXPENSES_CLOSED");
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si el usuario no participa del evento", async () => {
+    vi.mocked(prisma.event.findUnique).mockResolvedValueOnce({
+      id: eventId,
+      status: "active",
+      participants: [],
+    } as never);
+    vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${token}`)
+      .send(body);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("devuelve 403 si el token anonimo pertenece a otro evento", async () => {
+    const otherEventId = "event-2";
+    const anonymousParticipant = {
+      id: "participant-anonymous",
+      eventId: otherEventId,
+      username: "invitado",
+      isAnonymous: true,
+    };
+    const anonymousToken = createSessionTokenService(env.JWT_SECRET).signParticipant(
+      anonymousParticipant.id,
+      otherEventId,
+    );
+
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce({ id: otherEventId, status: "active", participants: [] } as never)
+      .mockResolvedValueOnce({ id: eventId, status: "active", participants: [] } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${anonymousToken}`)
+      .send(body);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe("FORBIDDEN");
+    expect(prisma.eventParticipant.findMany).not.toHaveBeenCalled();
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+
+  it("permite a un participante anónimo crear gastos en un evento confirmado", async () => {
+    const anonymousParticipant = {
+      id: "participant-anonymous",
+      eventId,
+      username: "invitado",
+      isAnonymous: true,
+    };
+    const anonymousToken = createSessionTokenService(env.JWT_SECRET).signParticipant(
+      anonymousParticipant.id,
+      eventId,
+    );
+    const participants = [
+      ...body.payers.map((payer) => ({
+        id: payer.participantId,
+        eventId,
+        username: payer.participantId,
+        isAnonymous: false,
+      })),
+      { id: "participant-cami", eventId, username: "cami", isAnonymous: false },
+      anonymousParticipant,
+    ];
+    const createdAt = new Date("2026-09-20T00:00:00.000Z");
+    const createdExpense = {
+      id: "expense-1",
+      eventId,
+      description: body.description,
+      totalAmountCents: body.totalAmountCents,
+      createdByParticipantId: anonymousParticipant.id,
+      createdAt,
+      payers: body.payers.map((payer) => ({ ...payer, expenseId: "expense-1" })),
+      debtors: body.debtors.map((debtor) => ({ ...debtor, expenseId: "expense-1" })),
+    };
+    const confirmedEvent = {
+      id: eventId,
+      status: "confirmed",
+      expensesClosed: false,
+      participants: [],
+    };
+
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique).mockResolvedValue(confirmedEvent as never);
+    vi.mocked(prisma.eventParticipant.findMany).mockResolvedValueOnce(participants as never);
+    vi.mocked(prisma.expense.create).mockResolvedValueOnce(createdExpense as never);
+    vi.mocked(prisma.expense.findMany).mockResolvedValueOnce([createdExpense] as never);
+    vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([] as never);
+    vi.mocked(prisma.simplifiedDebt.deleteMany).mockResolvedValueOnce({ count: 0 } as never);
+    vi.mocked(prisma.simplifiedDebt.createMany).mockResolvedValueOnce({ count: 2 } as never);
+    vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
+      callback({
+        $queryRaw: vi.fn().mockResolvedValue([]),
+        expense: { create: prisma.expense.create, findMany: prisma.expense.findMany },
+        simplifiedDebt: {
+          findMany: prisma.simplifiedDebt.findMany,
+          deleteMany: prisma.simplifiedDebt.deleteMany,
+          createMany: prisma.simplifiedDebt.createMany,
+        },
+      })) as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${anonymousToken}`)
+      .send(body);
+
+    expect(response.status).toBe(201);
+    expect(response.body.createdByParticipantId).toBe(anonymousParticipant.id);
+  });
+
+  it("mantiene el cierre de gastos para una sesión anónima en un evento confirmado", async () => {
+    const anonymousParticipant = {
+      id: "participant-anonymous",
+      eventId,
+      username: "invitado",
+      isAnonymous: true,
+    };
+    const anonymousToken = createSessionTokenService(env.JWT_SECRET).signParticipant(
+      anonymousParticipant.id,
+      eventId,
+    );
+    vi.mocked(prisma.eventParticipant.findUnique).mockResolvedValue(anonymousParticipant as never);
+    vi.mocked(prisma.event.findUnique)
+      .mockResolvedValueOnce({
+        id: eventId,
+        status: "confirmed",
+        expensesClosed: false,
+        participants: [],
+      } as never)
+      .mockResolvedValueOnce({
+        id: eventId,
+        status: "confirmed",
+        expensesClosed: true,
+        participants: [],
+      } as never);
+
+    const response = await request(app)
+      .post(`/events/${eventId}/expenses`)
+      .set("Authorization", `Bearer ${anonymousToken}`)
+      .send(body);
+
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("EXPENSES_CLOSED");
+    expect(prisma.expense.create).not.toHaveBeenCalled();
+  });
+});

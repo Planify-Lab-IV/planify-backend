@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.husky
+test
+vitest.config.ts
+*.md
+.prettierrc.json
+.prettierignore
+eslint.config.mjs
+npm-debug.log*
