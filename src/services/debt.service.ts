@@ -230,9 +230,17 @@ export function createDebtService(
         throw new ValidationError("No podés saldar deudas con vos mismo");
       }
 
-      await findPersonDetail(userId, personKey);
+      const personDetail = await findPersonDetail(userId, personKey);
 
-      return debtRepository.withinTransaction(async (transaction) => {
+      // tomo todos los eventos donde el current user tiene una deuda con el otro usuario
+      // saco los repetidos y los ordeno de forma determinista
+      const eventIds = [...new Set(personDetail.breakdown.map((debt) => debt.eventId))].sort();
+
+      if (eventIds.length === 0) {
+        return { settledCount: 0, events: [] };
+      }
+
+      return eventBalanceRepository.withinLockedEventsTransaction(eventIds, async (transaction) => {
         const pendingDebts = await transaction.findPendingBetween(userId, counterpart);
 
         if (pendingDebts.length === 0) {

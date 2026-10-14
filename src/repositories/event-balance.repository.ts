@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../infrastructure/prisma.js";
 import type { SimplifiedDebt } from "../services/debt-simplification.service.js";
+import type { ParsedPersonKey } from "../types/balance.js";
 import type { SimplifiedDebtRecord } from "./debt.repository.js";
 import type { Expense } from "./expense.repository.js";
 
@@ -13,11 +14,32 @@ export interface EventBalanceTransaction {
   findDebts(): Promise<SimplifiedDebtRecord[]>;
 }
 
+export interface PendingDebtReference {
+  id: string;
+  eventId: string;
+}
+
+export interface EventBalanceSettlementTransaction {
+  findPendingBetween(userId: string, counterpart: ParsedPersonKey): Promise<PendingDebtReference[]>;
+  findPendingEventIds(eventIds: string[]): Promise<string[]>;
+  markManySettled(ids: string[], settledAt: Date): Promise<number>;
+}
+
 export interface EventBalanceRepository {
   withinLockedTransaction<T>(
     eventId: string,
     operation: (transaction: EventBalanceTransaction) => Promise<T>,
   ): Promise<T>;
+  withinLockedEventsTransaction<T>(
+    eventIds: string[],
+    operation: (transaction: EventBalanceSettlementTransaction) => Promise<T>,
+  ): Promise<T>;
+}
+
+function toCounterpartFilter(counterpart: ParsedPersonKey) {
+  return counterpart.type === "user"
+    ? { userId: counterpart.userId }
+    : { id: counterpart.participantId, userId: null, isAnonymous: true };
 }
 
 function createEventBalanceTransaction(
@@ -115,6 +137,56 @@ function createEventBalanceTransaction(
   };
 }
 
+function createEventBalanceSettlementTransaction(
+  transactionClient: Prisma.TransactionClient,
+  eventIds: string[],
+): EventBalanceSettlementTransaction {
+  return {
+    async findPendingBetween(userId, counterpart) {
+      return transactionClient.simplifiedDebt.findMany({
+        where: {
+          eventId: { in: eventIds },
+          status: "pending",
+          OR: [
+            { debtor: { userId }, creditor: toCounterpartFilter(counterpart) },
+            { debtor: toCounterpartFilter(counterpart), creditor: { userId } },
+          ],
+        },
+        select: { id: true, eventId: true },
+        orderBy: { id: "asc" },
+      });
+    },
+
+    async markManySettled(ids, settledAt) {
+      if (ids.length === 0) {
+        return 0;
+      }
+
+      const { count } = await transactionClient.simplifiedDebt.updateMany({
+        where: { id: { in: ids }, status: "pending" },
+        data: { status: "settled", settledAt },
+      });
+
+      return count;
+    },
+
+    async findPendingEventIds(affectedEventIds) {
+      if (affectedEventIds.length === 0) {
+        return [];
+      }
+
+      const debts = await transactionClient.simplifiedDebt.findMany({
+        where: { eventId: { in: affectedEventIds }, status: "pending" },
+        select: { eventId: true },
+        distinct: ["eventId"],
+        orderBy: { eventId: "asc" },
+      });
+
+      return debts.map((debt) => debt.eventId);
+    },
+  };
+}
+
 export const eventBalanceRepository: EventBalanceRepository = {
   async withinLockedTransaction(eventId, operation) {
     return prisma.$transaction(async (tx) => {
@@ -128,6 +200,25 @@ export const eventBalanceRepository: EventBalanceRepository = {
       `;
 
       return operation(createEventBalanceTransaction(tx, eventId));
+    });
+  },
+
+  async withinLockedEventsTransaction(eventIds, operation) {
+    const sortedEventIds = [...new Set(eventIds)].sort();
+
+    return prisma.$transaction(async (tx) => {
+      // Todos los eventos se bloquean en orden estable para mantener el saldado
+      // atómico y evitar interbloqueos entre dos solicitudes con los mismos eventos.
+      for (const eventId of sortedEventIds) {
+        await tx.$queryRaw`
+          SELECT id
+          FROM evento
+          WHERE id = ${eventId}
+          FOR UPDATE
+        `;
+      }
+
+      return operation(createEventBalanceSettlementTransaction(tx, sortedEventIds));
     });
   },
 };

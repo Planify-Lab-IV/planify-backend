@@ -90,8 +90,10 @@ describe("POST /events/:eventId/expenses", () => {
 
     vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
       callback({
-        expense: { create: prisma.expense.create },
+        $queryRaw: vi.fn().mockResolvedValue([]),
+        expense: { create: prisma.expense.create, findMany: prisma.expense.findMany },
         simplifiedDebt: {
+          findMany: prisma.simplifiedDebt.findMany,
           deleteMany: prisma.simplifiedDebt.deleteMany,
           createMany: prisma.simplifiedDebt.createMany,
         },
@@ -314,8 +316,10 @@ describe("POST /events/:eventId/expenses", () => {
     vi.mocked(prisma.simplifiedDebt.createMany).mockResolvedValueOnce({ count: 2 } as never);
     vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
       callback({
-        expense: { create: prisma.expense.create },
+        $queryRaw: vi.fn().mockResolvedValue([]),
+        expense: { create: prisma.expense.create, findMany: prisma.expense.findMany },
         simplifiedDebt: {
+          findMany: prisma.simplifiedDebt.findMany,
           deleteMany: prisma.simplifiedDebt.deleteMany,
           createMany: prisma.simplifiedDebt.createMany,
         },

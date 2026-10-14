@@ -272,6 +272,7 @@ describe("POST /me/balance/people/:personKey/settle", () => {
       callback: (tx: unknown) => unknown,
     ) =>
       callback({
+        $queryRaw: vi.fn().mockResolvedValue([]),
         simplifiedDebt: {
           findMany: transactionFindMany,
           updateMany: transactionUpdateMany,

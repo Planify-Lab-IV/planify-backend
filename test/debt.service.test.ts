@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { Expense, ExpenseRepository } from "../src/repositories/expense.repository.js";
 import type {
   EventBalanceRepository,
+  EventBalanceSettlementTransaction,
   EventBalanceTransaction,
+  PendingDebtReference,
 } from "../src/repositories/event-balance.repository.js";
 import type {
   DebtForUserRecord,
   DebtRepository,
-  DebtSettlementTransaction,
-  PendingDebtReference,
   SimplifiedDebtRecord,
 } from "../src/repositories/debt.repository.js";
 import type { SimplifiedDebt } from "../src/services/debt-simplification.service.js";
@@ -113,8 +113,6 @@ function createFakeDebtRepository(initialDebts: SimplifiedDebtRecord[] = []): De
       records[debtIndex] = { ...debt, status: "settled", settledAt };
       return 1;
     }),
-    withinTransaction: vi.fn(),
-    withinEventDebtTransaction: vi.fn(),
     replacePendingForEvent: vi.fn(async (eventId, debts) => {
       records = records.filter((d) => !(d.eventId === eventId && d.status === "pending"));
       records.push(
@@ -153,6 +151,7 @@ function createFakeEventBalanceRepository(
 
       return operation(transaction);
     }),
+    withinLockedEventsTransaction: vi.fn(),
   };
 }
 
@@ -233,30 +232,31 @@ function createDebtService(
   expenseRepository: ExpenseRepository,
   debtRepository: DebtRepository,
   event: Event | null = makeEvent(),
+  eventBalanceRepository = createFakeEventBalanceRepository(expenseRepository, debtRepository),
 ) {
   return createDebtServiceImplementation(
     debtRepository,
     createFakeEventRepository(event),
-    createFakeEventBalanceRepository(expenseRepository, debtRepository),
+    eventBalanceRepository,
   );
 }
 
 function mockSettlementTransaction(
-  debtRepository: DebtRepository,
+  eventBalanceRepository: EventBalanceRepository,
   pendingDebts: PendingDebtReference[],
   eventIdsWithPendingDebts: string[] = [],
 ) {
   const findPendingBetween = vi.fn().mockResolvedValue(pendingDebts);
   const markManySettled = vi.fn().mockResolvedValue(pendingDebts.length);
   const findPendingEventIds = vi.fn().mockResolvedValue(eventIdsWithPendingDebts);
-  const transaction: DebtSettlementTransaction = {
+  const transaction: EventBalanceSettlementTransaction = {
     findPendingBetween,
     markManySettled,
     findPendingEventIds,
   };
 
-  vi.mocked(debtRepository.withinTransaction).mockImplementation(async (operation) =>
-    operation(transaction),
+  vi.mocked(eventBalanceRepository.withinLockedEventsTransaction).mockImplementation(
+    async (_eventIds, operation) => operation(transaction),
   );
 
   return { findPendingBetween, markManySettled, findPendingEventIds };
@@ -1010,17 +1010,27 @@ describe("DebtService.settleWithPerson", () => {
   }
 
   it("salda las deudas pendientes en ambos sentidos y no incluye a terceros", async () => {
+    const expenseRepository = createFakeExpenseRepository();
     const debtRepository = createFakeDebtRepository();
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
     vi.mocked(debtRepository.findByUserId).mockResolvedValue(makeMarcosDebts());
     const transaction = mockSettlementTransaction(
-      debtRepository,
+      eventBalanceRepository,
       [
         { id: "debt-asado", eventId: "event-asado" },
         { id: "debt-cine", eventId: "event-cine" },
       ],
       ["event-cine"],
     );
-    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+    const service = createDebtService(
+      expenseRepository,
+      debtRepository,
+      makeEvent(),
+      eventBalanceRepository,
+    );
 
     await expect(service.settleWithPerson(userId, `user:${marcosId}`)).resolves.toEqual({
       settledCount: 2,
@@ -1040,10 +1050,19 @@ describe("DebtService.settleWithPerson", () => {
     );
     expect(transaction.markManySettled).toHaveBeenCalledOnce();
     expect(transaction.findPendingEventIds).toHaveBeenCalledWith(["event-asado", "event-cine"]);
+    expect(eventBalanceRepository.withinLockedEventsTransaction).toHaveBeenCalledWith(
+      ["event-asado", "event-cine"],
+      expect.any(Function),
+    );
   });
 
   it("salda una contraparte anónima solo en su evento", async () => {
+    const expenseRepository = createFakeExpenseRepository();
     const debtRepository = createFakeDebtRepository();
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
     vi.mocked(debtRepository.findByUserId).mockResolvedValue([
       makeDebtForUser({
         eventId: "event-asado",
@@ -1061,10 +1080,15 @@ describe("DebtService.settleWithPerson", () => {
         },
       }),
     ]);
-    const transaction = mockSettlementTransaction(debtRepository, [
+    const transaction = mockSettlementTransaction(eventBalanceRepository, [
       { id: "debt-invitado", eventId: "event-asado" },
     ]);
-    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+    const service = createDebtService(
+      expenseRepository,
+      debtRepository,
+      makeEvent(),
+      eventBalanceRepository,
+    );
 
     await expect(
       service.settleWithPerson(userId, "participant:participant-invitado-asado"),
@@ -1080,24 +1104,37 @@ describe("DebtService.settleWithPerson", () => {
   });
 
   it("es idempotente cuando la relación existe pero ya no tiene pendientes", async () => {
+    const expenseRepository = createFakeExpenseRepository();
     const debtRepository = createFakeDebtRepository();
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
     vi.mocked(debtRepository.findByUserId).mockResolvedValue(
       makeMarcosDebts().map((debt) => ({ ...debt, status: "settled" as const })),
     );
-    const transaction = mockSettlementTransaction(debtRepository, []);
-    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+    const service = createDebtService(
+      expenseRepository,
+      debtRepository,
+      makeEvent(),
+      eventBalanceRepository,
+    );
 
     await expect(service.settleWithPerson(userId, `user:${marcosId}`)).resolves.toEqual({
       settledCount: 0,
       events: [],
     });
 
-    expect(transaction.markManySettled).not.toHaveBeenCalled();
-    expect(transaction.findPendingEventIds).not.toHaveBeenCalled();
+    expect(eventBalanceRepository.withinLockedEventsTransaction).not.toHaveBeenCalled();
   });
 
   it("devuelve vacío a la segunda solicitud concurrente que no actualiza deudas", async () => {
+    const expenseRepository = createFakeExpenseRepository();
     const debtRepository = createFakeDebtRepository();
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
     vi.mocked(debtRepository.findByUserId).mockResolvedValue(makeMarcosDebts());
     const pendingDebts = [
       { id: "debt-asado", eventId: "event-asado" },
@@ -1128,15 +1165,20 @@ describe("DebtService.settleWithPerson", () => {
       return pendingDebts.length;
     });
     const findPendingEventIds = vi.fn(async () => []);
-    const transaction: DebtSettlementTransaction = {
+    const transaction: EventBalanceSettlementTransaction = {
       findPendingBetween,
       markManySettled,
       findPendingEventIds,
     };
-    vi.mocked(debtRepository.withinTransaction).mockImplementation(async (operation) =>
-      operation(transaction),
+    vi.mocked(eventBalanceRepository.withinLockedEventsTransaction).mockImplementation(
+      async (_eventIds, operation) => operation(transaction),
     );
-    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+    const service = createDebtService(
+      expenseRepository,
+      debtRepository,
+      makeEvent(),
+      eventBalanceRepository,
+    );
 
     const results = await Promise.all([
       service.settleWithPerson(userId, `user:${marcosId}`),
@@ -1156,8 +1198,18 @@ describe("DebtService.settleWithPerson", () => {
   });
 
   it("rechaza una clave inválida o una contraparte propia antes de consultar deudas", async () => {
+    const expenseRepository = createFakeExpenseRepository();
     const debtRepository = createFakeDebtRepository();
-    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
+    const service = createDebtService(
+      expenseRepository,
+      debtRepository,
+      makeEvent(),
+      eventBalanceRepository,
+    );
 
     await expect(service.settleWithPerson(userId, "marcos")).rejects.toBeInstanceOf(
       ValidationError,
@@ -1167,18 +1219,28 @@ describe("DebtService.settleWithPerson", () => {
     );
 
     expect(debtRepository.findByUserId).not.toHaveBeenCalled();
-    expect(debtRepository.withinTransaction).not.toHaveBeenCalled();
+    expect(eventBalanceRepository.withinLockedEventsTransaction).not.toHaveBeenCalled();
   });
 
   it("informa not found cuando no existe una relación con la persona", async () => {
+    const expenseRepository = createFakeExpenseRepository();
     const debtRepository = createFakeDebtRepository();
-    const service = createDebtService(createFakeExpenseRepository(), debtRepository);
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
+    const service = createDebtService(
+      expenseRepository,
+      debtRepository,
+      makeEvent(),
+      eventBalanceRepository,
+    );
 
     await expect(service.settleWithPerson(userId, `user:${marcosId}`)).rejects.toBeInstanceOf(
       NotFoundError,
     );
 
-    expect(debtRepository.withinTransaction).not.toHaveBeenCalled();
+    expect(eventBalanceRepository.withinLockedEventsTransaction).not.toHaveBeenCalled();
   });
 });
 
