@@ -8,11 +8,12 @@ export interface HttpMetricsDelta {
 
 export interface HttpMetricsRepository {
   addDailyMetrics(day: string, delta: HttpMetricsDelta): Promise<void>;
+  findDailyMetrics(day: string): Promise<HttpMetricsDelta | null>;
 }
 
 export const httpMetricsRepository: HttpMetricsRepository = {
   async addDailyMetrics(day, delta): Promise<void> {
-    const date = new Date(`${day}T00:00:00.000Z`);
+    const date = toDatabaseDate(day);
 
     await prisma.httpDailyMetric.upsert({
       where: { date },
@@ -29,4 +30,21 @@ export const httpMetricsRepository: HttpMetricsRepository = {
       },
     });
   },
+
+  async findDailyMetrics(day: string): Promise<HttpMetricsDelta | null> {
+    const metric = await prisma.httpDailyMetric.findUnique({
+      where: { date: toDatabaseDate(day) },
+      select: {
+        requestCount: true,
+        serverErrorCount: true,
+        responseDurationMs: true,
+      },
+    });
+
+    return metric;
+  },
 };
+
+function toDatabaseDate(day: string): Date {
+  return new Date(`${day}T00:00:00.000Z`);
+}

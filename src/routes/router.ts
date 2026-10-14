@@ -8,6 +8,7 @@ import groupsRouter from "./groups.js";
 import tasksRouter from "./tasks.js";
 import balancesRouter from "./balances.js";
 import activityLogRouter from "./activity-log.js";
+import internalKpisRouter from "./internal-kpis.js";
 import { RouteNotFoundError } from "../shared/errors/index.js";
 
 const router = Router();
@@ -19,6 +20,7 @@ router.use(groupsRouter);
 router.use(tasksRouter);
 router.use(balancesRouter);
 router.use(activityLogRouter);
+router.use(internalKpisRouter);
 
 // Handler 404 para cualquier ruta no mapeada
 router.use((_req, res, next) => {
