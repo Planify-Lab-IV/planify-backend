@@ -143,7 +143,10 @@ function createFakeEventBalanceRepository(
         findExpenses: () => expenseRepository.findByEventId(eventId),
         findSettledDebts: () => debtRepository.findSettledByEventId(eventId),
         replacePendingDebts: (debts) => debtRepository.replacePendingForEvent(eventId, debts),
-        findDebt: (debtId) => debtRepository.findById(debtId),
+        async findDebt(debtId) {
+          const debt = await debtRepository.findById(debtId);
+          return debt?.eventId === eventId ? debt : null;
+        },
         settleDebt: (debtId, settledAt) => debtRepository.markSettled(debtId, settledAt),
         findDebts: () => debtRepository.findByEventId(eventId),
       };
@@ -1187,7 +1190,15 @@ describe("DebtService.settleDebt", () => {
     const debt = makePendingDebt(debtId, eventId, "participant-ana", "participant-beto", 1500);
     const expenseRepository = createFakeExpenseRepository();
     const debtRepository = createFakeDebtRepository([debt]);
-    const service = createDebtService(expenseRepository, debtRepository);
+    const eventBalanceRepository = createFakeEventBalanceRepository(
+      expenseRepository,
+      debtRepository,
+    );
+    const service = createDebtServiceImplementation(
+      debtRepository,
+      createFakeEventRepository(makeEvent()),
+      eventBalanceRepository,
+    );
 
     await expect(
       service.settleDebt(eventId, debtId, { type: "user", userId: "user-ana" }),
@@ -1206,6 +1217,10 @@ describe("DebtService.settleDebt", () => {
     });
     expect(expenseRepository.findByEventId).not.toHaveBeenCalled();
     expect(debtRepository.replacePendingForEvent).not.toHaveBeenCalled();
+    expect(eventBalanceRepository.withinLockedTransaction).toHaveBeenCalledWith(
+      eventId,
+      expect.any(Function),
+    );
   });
 
   it("permite al acreedor saldar una deuda pendiente", async () => {

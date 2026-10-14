@@ -152,32 +152,35 @@ export function createDebtService(
       }
 
       const actorParticipantId = resolveActorParticipantId(event, eventId, actor);
-      const debt = await debtRepository.findById(debtId);
 
-      if (!debt || debt.eventId !== eventId) {
-        throw new NotFoundError("Deuda no encontrada");
-      }
-      if (debt.debtor.id !== actorParticipantId && debt.creditor.id !== actorParticipantId) {
-        throw new ForbiddenError("Solo el deudor o acreedor pueden saldar la deuda");
-      }
-      if (debt.status === "settled") {
-        throw new DebtAlreadySettledError();
-      }
+      return eventBalanceRepository.withinLockedTransaction(eventId, async (transaction) => {
+        const debt = await transaction.findDebt(debtId);
 
-      const settledAt = new Date();
-      const affectedRows = await debtRepository.markSettled(debtId, settledAt);
+        if (!debt) {
+          throw new NotFoundError("Deuda no encontrada");
+        }
+        if (debt.debtor.id !== actorParticipantId && debt.creditor.id !== actorParticipantId) {
+          throw new ForbiddenError("Solo el deudor o acreedor pueden saldar la deuda");
+        }
+        if (debt.status === "settled") {
+          throw new DebtAlreadySettledError();
+        }
 
-      if (affectedRows === 0) {
-        throw new DebtAlreadySettledError();
-      }
+        const settledAt = new Date();
+        const affectedRows = await transaction.settleDebt(debtId, settledAt);
 
-      const debts = await debtRepository.findByEventId(eventId);
+        if (affectedRows === 0) {
+          throw new DebtAlreadySettledError();
+        }
 
-      return {
-        debt: { ...debt, status: "settled", settledAt },
-        allEventDebtsSettled:
-          debts.length > 0 && debts.every((currentDebt) => currentDebt.status === "settled"),
-      };
+        const debts = await transaction.findDebts();
+
+        return {
+          debt: { ...debt, status: "settled", settledAt },
+          allEventDebtsSettled:
+            debts.length > 0 && debts.every((currentDebt) => currentDebt.status === "settled"),
+        };
+      });
     },
 
     async getBalanceSummary(userId: string): Promise<UserBalanceSummary> {
