@@ -29,6 +29,7 @@ export interface TaskRepository {
   findById(id: string): Promise<Task | null>;
   findByEventId(eventId: string): Promise<Task[]>;
   create(params: CreateTaskParams): Promise<Task>;
+  claimIfUnassigned(id: string, participantId: string): Promise<Task | null>;
   update(id: string, params: UpdateTaskParams): Promise<Task>;
 }
 
@@ -50,6 +51,26 @@ export const taskRepository: TaskRepository = {
     return prisma.task.create({
       data: params,
     });
+  },
+
+  async claimIfUnassigned(id, participantId) {
+    const result = await prisma.task.updateMany({
+      where: {
+        id,
+        status: "unassigned",
+        assignedToParticipantId: null,
+      },
+      data: {
+        status: "pending",
+        assignedToParticipantId: participantId,
+      },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    return prisma.task.findUnique({ where: { id } });
   },
 
   async update(id, params) {
