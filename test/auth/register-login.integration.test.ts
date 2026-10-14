@@ -21,6 +21,7 @@ function toPublicUser(user: UserWithPassword): User {
     name: user.name,
     username: user.username,
     email: user.email,
+    avatarUrl: user.avatarUrl,
   };
 }
 
@@ -59,6 +60,7 @@ function createInMemoryUserRepository(): UserRepository {
         name,
         username,
         email,
+        avatarUrl: null,
         passwordHash,
       };
       users.push(user);

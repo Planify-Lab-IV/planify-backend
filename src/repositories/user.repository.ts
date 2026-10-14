@@ -9,6 +9,7 @@ export interface User {
   name: string;
   username: string;
   email: string;
+  avatarUrl: string | null;
 }
 
 // --> Usuario interno para autenticación (incluye el hash)
@@ -34,7 +35,7 @@ export const userRepository: UserRepository = {
   async findById(id: string): Promise<User | null> {
     const user = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, name: true, username: true, email: true },
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
     return user;
   },
@@ -42,7 +43,7 @@ export const userRepository: UserRepository = {
   async findByUsername(username: string): Promise<User | null> {
     const user = await prisma.user.findUnique({
       where: { username },
-      select: { id: true, name: true, username: true, email: true },
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
     return user;
   },
@@ -50,7 +51,7 @@ export const userRepository: UserRepository = {
   async findByEmail(email: string): Promise<User | null> {
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, name: true, username: true, email: true },
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
     return user;
   },
@@ -61,7 +62,7 @@ export const userRepository: UserRepository = {
       where: {
         OR: [{ email: identifier }, { username: identifier }],
       },
-      select: { id: true, name: true, username: true, email: true },
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
 
     return user;
@@ -82,6 +83,7 @@ export const userRepository: UserRepository = {
       name: user.name,
       username: user.username,
       email: user.email,
+      avatarUrl: user.avatarUrl,
       passwordHash: user.passwordHash,
     };
   },
@@ -94,7 +96,7 @@ export const userRepository: UserRepository = {
   }): Promise<User> {
     return await prisma.user.create({
       data,
-      select: { id: true, name: true, username: true, email: true },
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
   },
 };
