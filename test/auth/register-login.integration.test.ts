@@ -92,6 +92,12 @@ const participantRepository: ParticipantRepository = {
   async updateAttendance() {
     throw new Error("Not used in authentication tests");
   },
+  async updateLastReadAt() {
+    throw new Error("Not used in authentication tests");
+  },
+  async findParticipationsByUserId() {
+    return [];
+  },
 };
 
 function createTestApp() {

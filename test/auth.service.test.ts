@@ -50,6 +50,8 @@ function createInMemoryParticipantRepository(
     findAttendanceByEventIdAndUserId: vi.fn(),
     createAnonymous: vi.fn(),
     updateAttendance: vi.fn(),
+    updateLastReadAt: vi.fn(),
+    findParticipationsByUserId: vi.fn(),
   };
 }
 

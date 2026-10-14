@@ -81,6 +81,8 @@ function createParticipantRepository(participants: AttendanceParticipant[]): Par
     }),
     createAnonymous: vi.fn(),
     updateAttendance: vi.fn(),
+    updateLastReadAt: vi.fn(),
+    findParticipationsByUserId: vi.fn(),
   };
 }
 
@@ -113,7 +115,12 @@ function createTaskRepository(initialTasks: Task[]): TaskRepository {
 }
 
 function createActivityLogServiceMock(): ActivityLogService {
-  return { record: vi.fn(async () => {}), list: vi.fn(async () => []) };
+  return {
+    record: vi.fn(async () => {}),
+    list: vi.fn(async () => []),
+    markAsRead: vi.fn(async () => {}),
+    getUnreadCounts: vi.fn(async () => ({ events: [], groups: [] })),
+  };
 }
 
 function makeService(

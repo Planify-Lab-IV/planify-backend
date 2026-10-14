@@ -26,9 +26,16 @@ export interface CreateActivityLogParams {
   payload: Prisma.InputJsonValue;
 }
 
+export interface CountUnreadActivityLogParams {
+  eventId: string;
+  since: Date | null;
+  excludeActorParticipantId: string;
+}
+
 export interface ActivityLogRepository {
   create(params: CreateActivityLogParams): Promise<ActivityLog>;
   findByEventId(eventId: string): Promise<ActivityLogEntry[]>;
+  countUnread(params: CountUnreadActivityLogParams): Promise<number>;
 }
 
 export const activityLogRepository: ActivityLogRepository = {
@@ -56,6 +63,16 @@ export const activityLogRepository: ActivityLogRepository = {
         },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+  },
+
+  async countUnread({ eventId, since, excludeActorParticipantId }) {
+    return prisma.activityLog.count({
+      where: {
+        eventId,
+        actorParticipantId: { not: excludeActorParticipantId },
+        ...(since ? { createdAt: { gt: since } } : {}),
+      },
     });
   },
 };
