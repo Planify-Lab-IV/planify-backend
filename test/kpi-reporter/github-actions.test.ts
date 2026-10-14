@@ -10,6 +10,7 @@ describe("fuente de GitHub Actions", () => {
       createRun("2026-10-13T12:00:00.000Z", index < 60 ? "success" : "failure"),
     );
     const backendSecondPage = [
+      createRun("2026-10-07T00:00:00.000Z", "success"),
       createRun("2026-10-08T00:00:00.000Z", "success"),
       createRun("2026-10-06T23:59:59.000Z", "success"),
     ];
@@ -36,8 +37,8 @@ describe("fuente de GitHub Actions", () => {
     }) as unknown as typeof fetch;
 
     await expect(fetchCiKpis({ githubToken, now, fetchImpl })).resolves.toEqual({
-      ci_runs_last_7_days: 103,
-      ci_successful_runs_last_7_days: 62,
+      ci_runs_last_7_days: 104,
+      ci_successful_runs_last_7_days: 63,
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(3);

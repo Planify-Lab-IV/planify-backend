@@ -39,8 +39,17 @@ describe("fuente de KPIs del backend", () => {
     );
   });
 
-  it("falla si el backend devuelve un KPI faltante o inválido", async () => {
-    const fetchImpl = createFetch({ ...backendKpis, http_requests: -1 });
+  it.each([
+    { ...backendKpis, http_requests: -1 },
+    {
+      events_created_month_to_date: 12,
+      events_with_multiple_participants_count: 8,
+      events_with_activity_count: 5,
+      http_requests: 120,
+      http_5xx_responses: 2,
+    },
+  ])("falla si el backend devuelve un KPI faltante o inválido", async (payload) => {
+    const fetchImpl = createFetch(payload);
 
     await expect(fetchBackendKpis({ apiUrl, internalKpisToken, fetchImpl })).rejects.toThrow(
       "formato inválido",
