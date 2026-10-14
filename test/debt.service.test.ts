@@ -395,7 +395,7 @@ describe("DebtService.recalculateForEvent", () => {
     );
     const service = createDebtServiceImplementation(
       debtRepository,
-      createFakeEventRepository(),
+      createFakeEventRepository(makeEvent()),
       eventBalanceRepository,
     );
 
