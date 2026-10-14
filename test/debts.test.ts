@@ -15,6 +15,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
       findMany: vi.fn(),
       updateMany: vi.fn(),
     },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -86,6 +87,18 @@ describe("GET /events/:eventId/debts", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
+      callback({
+        $queryRaw: vi.fn().mockResolvedValue([]),
+        simplifiedDebt: {
+          findFirst: vi.fn(async ({ where }) => {
+            const debt = await prisma.simplifiedDebt.findUnique({ where: { id: where.id } });
+            return debt?.eventId === where.eventId ? debt : null;
+          }),
+          findMany: prisma.simplifiedDebt.findMany,
+          updateMany: prisma.simplifiedDebt.updateMany,
+        },
+      })) as never);
   });
 
   it("devuelve todas las deudas del evento con su contrato público", async () => {
@@ -256,6 +269,18 @@ describe("POST /events/:eventId/debts/:debtId/settle", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
+      callback({
+        $queryRaw: vi.fn().mockResolvedValue([]),
+        simplifiedDebt: {
+          findFirst: vi.fn(async ({ where }) => {
+            const debt = await prisma.simplifiedDebt.findUnique({ where: { id: where.id } });
+            return debt?.eventId === where.eventId ? debt : null;
+          }),
+          findMany: prisma.simplifiedDebt.findMany,
+          updateMany: prisma.simplifiedDebt.updateMany,
+        },
+      })) as never);
   });
 
   function mockSuccessfulSettlement(

@@ -97,6 +97,29 @@ function createTaskRepository(initialTasks: Task[]): TaskRepository {
       tasks.push(task);
       return task;
     }),
+    claimIfUnassigned: vi.fn(async (id, participantId) => {
+      const taskIndex = tasks.findIndex(
+        (task) =>
+          task.id === id && task.status === "unassigned" && task.assignedToParticipantId === null,
+      );
+      if (taskIndex === -1) {
+        return null;
+      }
+
+      const task = tasks[taskIndex];
+      if (!task) {
+        return null;
+      }
+
+      const claimedTask: Task = {
+        ...task,
+        status: "pending" as const,
+        assignedToParticipantId: participantId,
+        updatedAt: new Date("2026-01-02T00:00:00Z"),
+      };
+      tasks[taskIndex] = claimedTask;
+      return claimedTask;
+    }),
     update: vi.fn(async (id, params) => {
       const taskIndex = tasks.findIndex((task) => task.id === id);
       if (taskIndex === -1) {
@@ -223,10 +246,7 @@ describe("TaskService", () => {
       assignedToParticipantId: "participant-user",
     });
 
-    expect(taskRepository.update).toHaveBeenCalledWith("task-1", {
-      status: "pending",
-      assignedToParticipantId: "participant-user",
-    });
+    expect(taskRepository.claimIfUnassigned).toHaveBeenCalledWith("task-1", "participant-user");
   });
 
   it("rechaza tomar una tarea que ya tiene dueño", async () => {
@@ -237,7 +257,34 @@ describe("TaskService", () => {
     await expect(
       service.claim("task-1", { type: "user", userId: "user-1" }),
     ).rejects.toBeInstanceOf(ValidationError);
-    expect(taskRepository.update).not.toHaveBeenCalled();
+    expect(taskRepository.claimIfUnassigned).toHaveBeenCalledWith("task-1", "participant-user");
+  });
+
+  it("permite que solo uno de dos participantes tome la misma tarea", async () => {
+    const ana = makeParticipant({ id: "participant-ana", userId: "user-ana" });
+    const beto = makeParticipant({ id: "participant-beto", userId: "user-beto" });
+    const { service, taskRepository } = makeService([makeTask()], [ana, beto]);
+    const taskReadBarrier = Promise.withResolvers<void>();
+    let taskReads = 0;
+
+    vi.mocked(taskRepository.findById).mockImplementation(async () => {
+      taskReads += 1;
+      if (taskReads === 2) {
+        taskReadBarrier.resolve();
+      }
+
+      await taskReadBarrier.promise;
+      return makeTask();
+    });
+
+    const results = await Promise.allSettled([
+      service.claim("task-1", { type: "user", userId: ana.userId! }),
+      service.claim("task-1", { type: "user", userId: beto.userId! }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(taskRepository.claimIfUnassigned).toHaveBeenCalledTimes(2);
   });
 
   it("permite al organizador asignar una tarea a otro participante", async () => {

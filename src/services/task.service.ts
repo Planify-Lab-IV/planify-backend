@@ -109,14 +109,12 @@ export function createTaskService(
       const task = await findTask(taskId);
       const participant = await resolveParticipant(task.eventId, actor);
 
-      if (task.status !== "unassigned") {
+      const claimedTask = await taskRepository.claimIfUnassigned(task.id, participant.id);
+      if (!claimedTask) {
         throw new ValidationError("La tarea ya tiene un participante asignado");
       }
 
-      return taskRepository.update(task.id, {
-        status: "pending",
-        assignedToParticipantId: participant.id,
-      });
+      return claimedTask;
     },
 
     async assignTo(taskId, participantId, actor) {

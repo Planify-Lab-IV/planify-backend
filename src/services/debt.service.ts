@@ -1,4 +1,4 @@
-import type { Expense, ExpenseRepository } from "../repositories/expense.repository.js";
+import type { Expense } from "../repositories/expense.repository.js";
 import type {
   DebtForUserRecord,
   DebtParticipantForUserRecord,
@@ -25,6 +25,7 @@ import {
 } from "../shared/errors/index.js";
 import { simplifyDebts, type ParticipantAmountCents } from "./debt-simplification.service.js";
 import type { Event, EventRepository } from "../repositories/event.repository.js";
+import type { EventBalanceRepository } from "../repositories/event-balance.repository.js";
 export { isPersonKey, parsePersonKey } from "../types/balance.js";
 
 export interface EventDebts {
@@ -58,9 +59,9 @@ export interface DebtService {
 }
 
 export function createDebtService(
-  expenseRepository: ExpenseRepository,
   debtRepository: DebtRepository,
   eventRepository: EventRepository,
+  eventBalanceRepository: EventBalanceRepository,
 ): DebtService {
   function resolveActorParticipantId(
     event: Event,
@@ -110,15 +111,17 @@ export function createDebtService(
 
   return {
     async recalculateForEvent(eventId: string): Promise<void> {
-      const [expenses, settledDebts] = await Promise.all([
-        expenseRepository.findByEventId(eventId),
-        debtRepository.findSettledByEventId(eventId),
-      ]);
+      await eventBalanceRepository.withinLockedTransaction(eventId, async (transaction) => {
+        const [expenses, settledDebts] = await Promise.all([
+          transaction.findExpenses(),
+          transaction.findSettledDebts(),
+        ]);
 
-      const participantAmounts = buildParticipantAmounts(expenses, settledDebts);
-      const simplifiedDebts = simplifyDebts(participantAmounts);
+        const participantAmounts = buildParticipantAmounts(expenses, settledDebts);
+        const simplifiedDebts = simplifyDebts(participantAmounts);
 
-      await debtRepository.replacePendingForEvent(eventId, simplifiedDebts);
+        await transaction.replacePendingDebts(simplifiedDebts);
+      });
     },
 
     async listEventDebts(eventId, actor) {
@@ -149,32 +152,35 @@ export function createDebtService(
       }
 
       const actorParticipantId = resolveActorParticipantId(event, eventId, actor);
-      const debt = await debtRepository.findById(debtId);
 
-      if (!debt || debt.eventId !== eventId) {
-        throw new NotFoundError("Deuda no encontrada");
-      }
-      if (debt.debtor.id !== actorParticipantId && debt.creditor.id !== actorParticipantId) {
-        throw new ForbiddenError("Solo el deudor o acreedor pueden saldar la deuda");
-      }
-      if (debt.status === "settled") {
-        throw new DebtAlreadySettledError();
-      }
+      return eventBalanceRepository.withinLockedTransaction(eventId, async (transaction) => {
+        const debt = await transaction.findDebt(debtId);
 
-      const settledAt = new Date();
-      const affectedRows = await debtRepository.markSettled(debtId, settledAt);
+        if (!debt) {
+          throw new NotFoundError("Deuda no encontrada");
+        }
+        if (debt.debtor.id !== actorParticipantId && debt.creditor.id !== actorParticipantId) {
+          throw new ForbiddenError("Solo el deudor o acreedor pueden saldar la deuda");
+        }
+        if (debt.status === "settled") {
+          throw new DebtAlreadySettledError();
+        }
 
-      if (affectedRows === 0) {
-        throw new DebtAlreadySettledError();
-      }
+        const settledAt = new Date();
+        const affectedRows = await transaction.settleDebt(debtId, settledAt);
 
-      const debts = await debtRepository.findByEventId(eventId);
+        if (affectedRows === 0) {
+          throw new DebtAlreadySettledError();
+        }
 
-      return {
-        debt: { ...debt, status: "settled", settledAt },
-        allEventDebtsSettled:
-          debts.length > 0 && debts.every((currentDebt) => currentDebt.status === "settled"),
-      };
+        const debts = await transaction.findDebts();
+
+        return {
+          debt: { ...debt, status: "settled", settledAt },
+          allEventDebtsSettled:
+            debts.length > 0 && debts.every((currentDebt) => currentDebt.status === "settled"),
+        };
+      });
     },
 
     async getBalanceSummary(userId: string): Promise<UserBalanceSummary> {
@@ -224,9 +230,17 @@ export function createDebtService(
         throw new ValidationError("No podés saldar deudas con vos mismo");
       }
 
-      await findPersonDetail(userId, personKey);
+      const personDetail = await findPersonDetail(userId, personKey);
 
-      return debtRepository.withinTransaction(async (transaction) => {
+      // tomo todos los eventos donde el current user tiene una deuda con el otro usuario
+      // saco los repetidos y los ordeno de forma determinista
+      const eventIds = [...new Set(personDetail.breakdown.map((debt) => debt.eventId))].sort();
+
+      if (eventIds.length === 0) {
+        return { settledCount: 0, events: [] };
+      }
+
+      return eventBalanceRepository.withinLockedEventsTransaction(eventIds, async (transaction) => {
         const pendingDebts = await transaction.findPendingBetween(userId, counterpart);
 
         if (pendingDebts.length === 0) {
