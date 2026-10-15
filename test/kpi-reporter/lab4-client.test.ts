@@ -84,6 +84,13 @@ describe("cliente de Lab4 KPIs", () => {
     await expect(client.verifyMeasurements(measurements)).rejects.toThrow("http_5xx_responses");
   });
 
+  it("falla si Lab4 responde una verificación con formato inválido", async () => {
+    const fetchImpl = createFetch({ unexpected: true });
+    const client = createClient(fetchImpl);
+
+    await expect(client.verifyMeasurements(measurements)).rejects.toThrow("formato inválido");
+  });
+
   it("falla si faltan credenciales de Lab4", () => {
     expect(() => createLab4Client({ supabaseUrl, supabasePublishableKey, projectKey: "" })).toThrow(
       "PROJECT_KEY",

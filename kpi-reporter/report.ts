@@ -3,7 +3,7 @@ import { pathToFileURL } from "node:url";
 import { writeKpiReportArtifact } from "./artifact.js";
 import type { KpiId, KpiSource } from "./catalog.js";
 import { getArgentinaDay, getArgentinaDayRange } from "../src/shared/time/argentina-date.js";
-import { createLab4Client, type ValueDifference } from "./lab4-client.js";
+import { createLab4Client, Lab4ResponseError, type ValueDifference } from "./lab4-client.js";
 import type {
   FailedKpiSourceResult,
   KpiEnvironment,
@@ -116,6 +116,10 @@ export async function runKpiReport({
       }
     } catch (error) {
       reportError = toError(error);
+
+      if (reportError instanceof Lab4ResponseError) {
+        responseStatus = reportError.status;
+      }
     }
   }
 
@@ -139,6 +143,10 @@ export async function runKpiReport({
       sourceFailures.map((result) => result.error),
       `Fallaron las fuentes de KPIs: ${sourceFailures.map((result) => result.source).join(", ")}`,
     );
+  }
+
+  if (responseStatus === null) {
+    throw new Error("Lab4 no informó un estado para el envío de KPIs");
   }
 
   return {

@@ -25,6 +25,16 @@ export interface ValueDifference {
   storedValue: number;
 }
 
+export class Lab4ResponseError extends Error {
+  readonly status: number;
+
+  constructor(action: string, status: number, responseBody: string) {
+    super(`Lab4 no pudo ${action}: HTTP ${status}${responseBody ? ` ${responseBody}` : ""}`);
+    this.name = "Lab4ResponseError";
+    this.status = status;
+  }
+}
+
 interface StoredMeasurement {
   kpi_id: KpiId;
   value: number;
@@ -146,11 +156,12 @@ function createMeasurementsUrl(supabaseUrl: string): URL {
   return new URL(MEASUREMENTS_PATH, supabaseUrl);
 }
 
-async function createLab4ResponseError(action: string, response: Response): Promise<Error> {
+async function createLab4ResponseError(
+  action: string,
+  response: Response,
+): Promise<Lab4ResponseError> {
   const responseBody = await response.text();
-  return new Error(
-    `Lab4 no pudo ${action}: HTTP ${response.status}${responseBody ? ` ${responseBody}` : ""}`,
-  );
+  return new Lab4ResponseError(action, response.status, responseBody);
 }
 
 function parseStoredMeasurements(

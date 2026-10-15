@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import type { Lab4Client } from "../../kpi-reporter/lab4-client.js";
+import {
+  Lab4ResponseError,
+  type Lab4Client,
+  type ValueDifference,
+} from "../../kpi-reporter/lab4-client.js";
 import { readKpiReportConfig, runKpiReport } from "../../kpi-reporter/report.js";
 
 const now = new Date("2026-10-15T00:15:00.000Z");
@@ -58,6 +62,75 @@ describe("ejecución del reporter de KPIs", () => {
     );
   });
 
+  it("no publica, deja evidencia y falla cuando ninguna fuente responde", async () => {
+    const testSetup = createTestSetup({
+      backendError: new Error("backend unavailable"),
+      ciError: new Error("GitHub unavailable"),
+      healthError: new Error("health unavailable"),
+    });
+
+    await expect(runKpiReport(testSetup.options)).rejects.toThrow(
+      "Ninguna fuente entregó mediciones",
+    );
+
+    expect(testSetup.lab4Client.sendMeasurements).not.toHaveBeenCalled();
+    expect(testSetup.writeArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({ responseStatus: null, measurements: [] }),
+    );
+  });
+
+  it("guarda el estado HTTP si Lab4 rechaza el POST", async () => {
+    const testSetup = createTestSetup({
+      lab4SendError: new Lab4ResponseError("enviar las mediciones", 502, "bad gateway"),
+    });
+
+    await expect(runKpiReport(testSetup.options)).rejects.toThrow("HTTP 502");
+
+    expect(testSetup.writeArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({ responseStatus: 502 }),
+    );
+  });
+
+  it("guarda el estado HTTP si falla la verificación posterior en Lab4", async () => {
+    const testSetup = createTestSetup({
+      lab4VerificationError: new Lab4ResponseError("verificar las mediciones", 503, "unavailable"),
+    });
+
+    await expect(runKpiReport(testSetup.options)).rejects.toThrow("HTTP 503");
+
+    expect(testSetup.writeArtifact).toHaveBeenCalledWith(
+      expect.objectContaining({ responseStatus: 503 }),
+    );
+  });
+
+  it("avisa si Lab4 conserva un valor de una corrida previa", async () => {
+    const testSetup = createTestSetup({
+      valueDifferences: [{ kpiId: "http_requests", sentValue: 20, storedValue: 18 }],
+    });
+
+    await expect(runKpiReport(testSetup.options)).resolves.toBeDefined();
+
+    expect(testSetup.warn).toHaveBeenCalledWith("Lab4 conservó http_requests=18 en lugar de 20");
+  });
+
+  it("acepta una fecha pasada y rechaza una futura según el día argentino", async () => {
+    const pastDaySetup = createTestSetup();
+
+    await expect(
+      runKpiReport({ ...pastDaySetup.options, day: "2026-10-13" }),
+    ).resolves.toMatchObject({ day: "2026-10-13" });
+    expect(pastDaySetup.fetchBackendKpis).toHaveBeenCalledWith(
+      expect.objectContaining({ day: "2026-10-13" }),
+    );
+
+    const futureDaySetup = createTestSetup();
+
+    await expect(runKpiReport({ ...futureDaySetup.options, day: "2026-10-15" })).rejects.toThrow(
+      "no puede ser futura",
+    );
+    expect(futureDaySetup.fetchBackendKpis).not.toHaveBeenCalled();
+  });
+
   it("rechaza configuraciones sin variables requeridas o con un ambiente no publicable", () => {
     expect(() => readKpiReportConfig({ KPI_TARGET_ENV: "qa" })).toThrow("debe ser dev o prod");
     expect(() => readKpiReportConfig({ KPI_TARGET_ENV: "dev" })).toThrow("PLANIFY_API_URL");
@@ -67,16 +140,38 @@ describe("ejecución del reporter de KPIs", () => {
 function createTestSetup({
   backendError,
   backendValues,
+  ciError,
+  healthError,
+  lab4SendError,
+  lab4VerificationError,
+  valueDifferences = [],
 }: {
   backendError?: Error;
   backendValues?: Partial<{ http_requests: number; http_5xx_responses: number }>;
+  ciError?: Error;
+  healthError?: Error;
+  lab4SendError?: Error;
+  lab4VerificationError?: Error;
+  valueDifferences?: readonly ValueDifference[];
 } = {}) {
   const lab4Client: Lab4Client & {
     sendMeasurements: ReturnType<typeof vi.fn>;
     verifyMeasurements: ReturnType<typeof vi.fn>;
   } = {
-    sendMeasurements: vi.fn(async () => 201),
-    verifyMeasurements: vi.fn(async () => ({ valueDifferences: [] })),
+    sendMeasurements: vi.fn(async () => {
+      if (lab4SendError) {
+        throw lab4SendError;
+      }
+
+      return 201;
+    }),
+    verifyMeasurements: vi.fn(async () => {
+      if (lab4VerificationError) {
+        throw lab4VerificationError;
+      }
+
+      return { valueDifferences };
+    }),
   };
   const writeArtifact = vi.fn(async () => "/tmp/kpi-report.json");
   const fetchBackendKpis = vi.fn(async () => {
@@ -93,10 +188,33 @@ function createTestSetup({
       http_response_time_total_ms: 1500,
     };
   });
+  const fetchCiKpis = vi.fn(async () => {
+    if (ciError) {
+      throw ciError;
+    }
+
+    return {
+      ci_runs_last_7_days: 10,
+      ci_successful_runs_last_7_days: 8,
+    };
+  });
+  const measureHealthKpis = vi.fn(async () => {
+    if (healthError) {
+      throw healthError;
+    }
+
+    return {
+      health_checks_total: 10,
+      health_checks_successful: 9,
+    };
+  });
+  const warn = vi.fn();
 
   return {
     lab4Client,
     writeArtifact,
+    fetchBackendKpis,
+    warn,
     options: {
       apiUrl: "http://planify.example",
       internalKpisToken: "internal-token",
@@ -108,18 +226,12 @@ function createTestSetup({
       now,
       dependencies: {
         fetchBackendKpis: fetchBackendKpis as never,
-        fetchCiKpis: vi.fn(async () => ({
-          ci_runs_last_7_days: 10,
-          ci_successful_runs_last_7_days: 8,
-        })) as never,
-        measureHealthKpis: vi.fn(async () => ({
-          health_checks_total: 10,
-          health_checks_successful: 9,
-        })) as never,
+        fetchCiKpis: fetchCiKpis as never,
+        measureHealthKpis: measureHealthKpis as never,
         createLab4Client: vi.fn(() => lab4Client) as never,
         writeKpiReportArtifact: writeArtifact as never,
         createRunId: () => runId,
-        warn: vi.fn(),
+        warn,
       },
     },
   };
