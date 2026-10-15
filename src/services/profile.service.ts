@@ -33,19 +33,18 @@ export interface ProfileService {
 }
 
 export interface ProfileUpdateCoordinator {
-  runExclusive<T>(userId: string, operation: () => Promise<T>): Promise<T>;
+  runExclusive<T>(
+    userId: string,
+    operation: (userRepository: UserRepository) => Promise<T>,
+  ): Promise<T>;
 }
-
-const directProfileUpdateCoordinator: ProfileUpdateCoordinator = {
-  runExclusive(_userId, operation) {
-    return operation();
-  },
-};
 
 export function createProfileService(
   userRepository: UserRepository,
   avatarStorage: AvatarStorage | null,
-  profileUpdateCoordinator: ProfileUpdateCoordinator = directProfileUpdateCoordinator,
+  profileUpdateCoordinator: ProfileUpdateCoordinator = createDirectProfileUpdateCoordinator(
+    userRepository,
+  ),
 ): ProfileService {
   return {
     async updateProfile(userId, input) {
@@ -72,45 +71,64 @@ export function createProfileService(
         avatar = await validateAvatar(uploadedAvatar);
       }
 
-      return profileUpdateCoordinator.runExclusive(userId, async () => {
-        const currentUser = await userRepository.findById(userId);
-        if (!currentUser) {
-          throw new UnauthorizedError("La sesión ya no corresponde a un usuario activo");
+      let newAvatarUrl: string | undefined;
+      if (avatar) {
+        newAvatarUrl = await avatarStorage!.save(avatar);
+      }
+
+      let result: { user: User; previousAvatarUrl: string | null };
+
+      try {
+        result = await profileUpdateCoordinator.runExclusive(
+          userId,
+          async (transactionalUserRepository) => {
+            const currentUser = await transactionalUserRepository.findById(userId);
+            if (!currentUser) {
+              throw new UnauthorizedError("La sesión ya no corresponde a un usuario activo");
+            }
+
+            const updatedUser = await transactionalUserRepository.updateProfile(
+              userId,
+              createUpdateData(name, newAvatarUrl),
+            );
+
+            return {
+              user: updatedUser,
+              previousAvatarUrl: newAvatarUrl ? currentUser.avatarUrl : null,
+            };
+          },
+        );
+      } catch (error) {
+        if (newAvatarUrl) {
+          try {
+            await avatarStorage!.remove(newAvatarUrl);
+          } catch (cleanupError) {
+            console.error("No se pudo limpiar el avatar nuevo tras un error", cleanupError);
+          }
         }
 
-        let newAvatarUrl: string | undefined;
+        throw error;
+      }
 
-        if (avatar) {
-          newAvatarUrl = await avatarStorage!.save(avatar);
-        }
-
+      if (result.previousAvatarUrl) {
         try {
-          const updatedUser = await userRepository.updateProfile(
-            userId,
-            createUpdateData(name, newAvatarUrl),
-          );
-
-          if (newAvatarUrl && currentUser.avatarUrl) {
-            try {
-              await avatarStorage!.remove(currentUser.avatarUrl);
-            } catch (error) {
-              console.error("No se pudo borrar el avatar anterior", error);
-            }
-          }
-
-          return updatedUser;
+          await avatarStorage!.remove(result.previousAvatarUrl);
         } catch (error) {
-          if (newAvatarUrl) {
-            try {
-              await avatarStorage!.remove(newAvatarUrl);
-            } catch (cleanupError) {
-              console.error("No se pudo limpiar el avatar nuevo tras un error", cleanupError);
-            }
-          }
-
-          throw error;
+          console.error("No se pudo borrar el avatar anterior", error);
         }
-      });
+      }
+
+      return result.user;
+    },
+  };
+}
+
+function createDirectProfileUpdateCoordinator(
+  userRepository: UserRepository,
+): ProfileUpdateCoordinator {
+  return {
+    runExclusive(_userId, operation) {
+      return operation(userRepository);
     },
   };
 }

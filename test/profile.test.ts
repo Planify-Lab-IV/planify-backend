@@ -71,9 +71,10 @@ function createApp(
   avatarStorage: AvatarStorage | null,
   uploadsDirectory?: string,
   initialUser: User = user,
-  profileUpdateCoordinator?: ProfileUpdateCoordinator,
+  profileUpdateCoordinatorFactory?: (userRepository: UserRepository) => ProfileUpdateCoordinator,
 ) {
   const userRepository = createInMemoryUserRepository(initialUser);
+  const profileUpdateCoordinator = profileUpdateCoordinatorFactory?.(userRepository);
   const profileService = createProfileService(
     userRepository,
     avatarStorage,
@@ -150,7 +151,7 @@ describe("PATCH /me/profile", () => {
       avatarStorage,
       undefined,
       initialUser,
-      createSerialProfileUpdateCoordinator(),
+      createSerialProfileUpdateCoordinator,
     );
 
     const responses = await Promise.all([
@@ -266,11 +267,16 @@ async function createTemporaryDirectory(): Promise<string> {
   return directory;
 }
 
-function createSerialProfileUpdateCoordinator(): ProfileUpdateCoordinator {
+function createSerialProfileUpdateCoordinator(
+  userRepository: UserRepository,
+): ProfileUpdateCoordinator {
   const tails = new Map<string, Promise<void>>();
 
   return {
-    async runExclusive<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+    async runExclusive<T>(
+      userId: string,
+      operation: (transactionalUserRepository: UserRepository) => Promise<T>,
+    ): Promise<T> {
       const previous = tails.get(userId) ?? Promise.resolve();
       let release: () => void;
       const completion = new Promise<void>((resolve) => {
@@ -282,7 +288,7 @@ function createSerialProfileUpdateCoordinator(): ProfileUpdateCoordinator {
       await previous;
 
       try {
-        return await operation();
+        return await operation(userRepository);
       } finally {
         release!();
         if (tails.get(userId) === next) {
