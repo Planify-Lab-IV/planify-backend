@@ -66,7 +66,7 @@ describe("HttpMetricsAccumulator", () => {
     expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(3, "2026-10-13", metrics(2, 1, 20n));
   });
 
-  it("también guarda los incrementos registrados durante un flush en curso", async () => {
+  it("vuelca los incrementos que llegaron durante un flush al siguiente volcado", async () => {
     const repository = createRepository();
     let resolveFirstWrite: (() => void) | undefined;
     const firstWriteStarted = new Promise<void>((resolve) => {
@@ -84,13 +84,30 @@ describe("HttpMetricsAccumulator", () => {
 
     await firstWriteStarted;
     accumulator.record("2026-10-12", metrics(2, 1, 75n));
+    const nextFlush = accumulator.flush();
     resolveFirstWrite?.();
 
+    await nextFlush;
     await flush;
 
     expect(repository.addDailyMetrics).toHaveBeenCalledTimes(2);
     expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(1, "2026-10-12", metrics(1, 0, 25n));
     expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(2, "2026-10-12", metrics(2, 1, 75n));
+  });
+
+  it("termina el flush aunque siga entrando tráfico durante cada escritura", async () => {
+    const repository = createRepository();
+    const accumulator = createHttpMetricsAccumulator(repository);
+    vi.mocked(repository.addDailyMetrics).mockImplementation(async () => {
+      accumulator.record("2026-10-12", metrics(1, 0, 10n));
+    });
+
+    accumulator.record("2026-10-12", metrics(1, 0, 10n));
+
+    await accumulator.flush();
+
+    expect(repository.addDailyMetrics).toHaveBeenCalledOnce();
+    expect(repository.addDailyMetrics).toHaveBeenCalledWith("2026-10-12", metrics(1, 0, 10n));
   });
 
   it("rechaza incrementos inválidos antes de acumularlos", () => {
