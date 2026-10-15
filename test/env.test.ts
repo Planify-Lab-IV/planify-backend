@@ -1,0 +1,45 @@
+import { describe, expect, it } from "vitest";
+import { getAvatarStorageMode, parseEnv } from "../src/shared/config/env.js";
+
+const baseEnv = {
+  DATABASE_URL: "postgresql://user:password@localhost:5432/planify?schema=public",
+  JWT_SECRET: "test-secret-que-cumple-con-los-32-caracteres",
+};
+
+describe("avatar storage environment", () => {
+  it("uses local storage by default outside production", () => {
+    const env = parseEnv({ ...baseEnv, NODE_ENV: "development" });
+
+    expect(getAvatarStorageMode(env)).toBe("local");
+  });
+
+  it("keeps local storage when it is configured explicitly", () => {
+    const env = parseEnv({ ...baseEnv, NODE_ENV: "production", AVATAR_STORAGE: "local" });
+
+    expect(getAvatarStorageMode(env)).toBe("local");
+  });
+
+  it("uses no avatar storage in production when it is not configured", () => {
+    const env = parseEnv({ ...baseEnv, NODE_ENV: "production" });
+
+    expect(getAvatarStorageMode(env)).toBe("unavailable");
+  });
+
+  it("accepts S3 only with bucket and region", () => {
+    const env = parseEnv({
+      ...baseEnv,
+      AVATAR_STORAGE: "s3",
+      AVATAR_S3_BUCKET: "planify-avatars",
+      AWS_REGION: "us-east-1",
+    });
+
+    expect(getAvatarStorageMode(env)).toBe("s3");
+  });
+
+  it.each([
+    [{ ...baseEnv, AVATAR_STORAGE: "s3", AWS_REGION: "us-east-1" }, "AVATAR_S3_BUCKET"],
+    [{ ...baseEnv, AVATAR_STORAGE: "s3", AVATAR_S3_BUCKET: "planify-avatars" }, "AWS_REGION"],
+  ])("rejects incomplete S3 configuration", (input, missingVariable) => {
+    expect(() => parseEnv(input)).toThrow(missingVariable);
+  });
+});

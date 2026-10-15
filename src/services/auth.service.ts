@@ -74,6 +74,7 @@ export function createAuthService(
           name: user.name,
           username: user.username,
           email: user.email,
+          avatarUrl: user.avatarUrl,
         },
         token,
       };

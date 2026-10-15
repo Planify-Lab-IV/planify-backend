@@ -1,0 +1,82 @@
+name: Daily KPI report
+
+on:
+  schedule:
+    - cron: "15 0 * * *"
+  workflow_dispatch:
+    inputs:
+      target_env:
+        description: Environment where KPIs will be published
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - prod
+      date:
+        description: Optional Argentina date to report (YYYY-MM-DD)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+concurrency:
+  group: kpi-report-${{ inputs.target_env || 'prod' }}
+  cancel-in-progress: false
+
+jobs:
+  report:
+    name: Report KPIs
+    runs-on: ubuntu-latest
+    environment: kpis-${{ inputs.target_env || 'prod' }}
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Report KPIs to Lab4
+        run: npm run kpis:report
+        env:
+          KPI_TARGET_ENV: ${{ inputs.target_env || 'prod' }}
+          KPI_REPORT_DATE: ${{ inputs.date }}
+          PLANIFY_API_URL: ${{ vars.PLANIFY_API_URL }}
+          INTERNAL_KPIS_TOKEN: ${{ secrets.INTERNAL_KPIS_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
+          PROJECT_KEY: ${{ secrets.PROJECT_KEY }}
+
+      - name: Upload KPI report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kpi-report-${{ inputs.target_env || 'prod' }}-${{ github.run_id }}
+          path: kpi-reporter/output/
+          if-no-files-found: warn
+
+      - name: Create failure alert
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_ENV: ${{ inputs.target_env || 'prod' }}
+          REPORT_DATE: ${{ inputs.date || 'día argentino actual' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body=$(printf "El reporte de KPIs falló para el ambiente %s.\n\nFecha solicitada: %s\n\nRevisar la corrida y su artifact: %s" "$TARGET_ENV" "$REPORT_DATE" "$RUN_URL")
+
+          gh issue create \
+            --title "Fallo del reporte diario de KPIs (${TARGET_ENV})" \
+            --body "$body"
