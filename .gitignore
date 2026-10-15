@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 coverage/
+uploads/
 .DS_Store
 .idea/
 .vscode/
