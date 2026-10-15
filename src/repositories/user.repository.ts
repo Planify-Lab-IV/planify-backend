@@ -29,6 +29,7 @@ export interface UserRepository {
     email: string;
     passwordHash: string;
   }): Promise<User>;
+  updateProfile(id: string, data: { name?: string; avatarUrl?: string }): Promise<User>;
 }
 
 export const userRepository: UserRepository = {
@@ -95,6 +96,14 @@ export const userRepository: UserRepository = {
     passwordHash: string;
   }): Promise<User> {
     return await prisma.user.create({
+      data,
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
+    });
+  },
+
+  async updateProfile(id: string, data: { name?: string; avatarUrl?: string }): Promise<User> {
+    return await prisma.user.update({
+      where: { id },
       data,
       select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
