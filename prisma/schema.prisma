@@ -9,11 +9,12 @@ datasource db {
 }
 
 model User {
-  id           String @id @default(uuid())
-  name         String @map("nombre")
-  username     String @unique
-  email        String @unique
-  passwordHash String @map("password_hash")
+  id           String  @id @default(uuid())
+  name         String  @map("nombre")
+  username     String  @unique
+  email        String  @unique
+  passwordHash String  @map("password_hash")
+  avatarUrl    String? @map("avatar_url")
 
   groupMemberships    GroupMember[]
   eventParticipations EventParticipant[]
@@ -83,13 +84,14 @@ model Invitation {
 }
 
 model EventParticipant {
-  id          String  @id @default(uuid())
-  eventId     String  @map("evento_id")
-  userId      String? @map("usuario_id")
+  id          String    @id @default(uuid())
+  eventId     String    @map("evento_id")
+  userId      String?   @map("usuario_id")
   username    String
-  isAnonymous Boolean @default(false) @map("es_anonimo")
-  isOrganizer Boolean @default(false) @map("es_organizador")
-  pinHash     String? @map("pin_hash")
+  isAnonymous Boolean   @default(false) @map("es_anonimo")
+  isOrganizer Boolean   @default(false) @map("es_organizador")
+  pinHash     String?   @map("pin_hash")
+  lastReadAt  DateTime? @map("ultima_lectura_at")
 
   event             Event              @relation(fields: [eventId], references: [id], onDelete: Cascade)
   user              User?              @relation(fields: [userId], references: [id], onDelete: SetNull)

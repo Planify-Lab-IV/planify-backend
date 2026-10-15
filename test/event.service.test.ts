@@ -97,6 +97,7 @@ const unusedUserRepository: UserRepository = {
   findPublicByIdentifier: vi.fn(),
   findByIdentifier: vi.fn(),
   create: vi.fn(),
+  updateProfile: vi.fn(),
 };
 
 const unusedParticipantRepository: ParticipantRepository = {
@@ -108,6 +109,8 @@ const unusedParticipantRepository: ParticipantRepository = {
   findAttendanceByEventIdAndUserId: vi.fn(),
   createAnonymous: vi.fn(),
   updateAttendance: vi.fn(),
+  updateLastReadAt: vi.fn(),
+  findParticipationsByUserId: vi.fn(),
 };
 
 const unusedDebtRepository: DebtRepository = {
@@ -116,12 +119,16 @@ const unusedDebtRepository: DebtRepository = {
   findSettledByEventId: vi.fn(),
   markSettled: vi.fn(),
   findByUserId: vi.fn(),
-  withinTransaction: vi.fn(),
   replacePendingForEvent: vi.fn(),
 };
 
 function createActivityLogServiceMock(): ActivityLogService {
-  return { record: vi.fn(async () => {}), list: vi.fn(async () => []) };
+  return {
+    record: vi.fn(async () => {}),
+    list: vi.fn(async () => []),
+    markAsRead: vi.fn(async () => {}),
+    getUnreadCounts: vi.fn(async () => ({ events: [], groups: [] })),
+  };
 }
 
 const unusedActivityLogService = createActivityLogServiceMock();
@@ -612,6 +619,8 @@ function createInMemoryParticipantRepository(
       records.set(id, updatedParticipant);
       return updatedParticipant;
     }),
+    updateLastReadAt: vi.fn(),
+    findParticipationsByUserId: vi.fn(),
   };
 }
 

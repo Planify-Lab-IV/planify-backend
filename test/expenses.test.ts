@@ -87,11 +87,14 @@ describe("POST /events/:eventId/expenses", () => {
     vi.mocked(prisma.simplifiedDebt.findMany).mockResolvedValueOnce([] as never);
     vi.mocked(prisma.simplifiedDebt.deleteMany).mockResolvedValueOnce({ count: 0 } as never);
     vi.mocked(prisma.simplifiedDebt.createMany).mockResolvedValueOnce({ count: 2 } as never);
+    const lockEvent = vi.fn().mockResolvedValue([]);
 
     vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
       callback({
-        expense: { create: prisma.expense.create },
+        $queryRaw: lockEvent,
+        expense: { create: prisma.expense.create, findMany: prisma.expense.findMany },
         simplifiedDebt: {
+          findMany: prisma.simplifiedDebt.findMany,
           deleteMany: prisma.simplifiedDebt.deleteMany,
           createMany: prisma.simplifiedDebt.createMany,
         },
@@ -109,6 +112,7 @@ describe("POST /events/:eventId/expenses", () => {
       payers: body.payers,
       debtors: body.debtors,
     });
+    expect(lockEvent).toHaveBeenCalledOnce();
   });
 
   it("rechaza un body inválido antes de consultar persistencia", async () => {
@@ -314,8 +318,10 @@ describe("POST /events/:eventId/expenses", () => {
     vi.mocked(prisma.simplifiedDebt.createMany).mockResolvedValueOnce({ count: 2 } as never);
     vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
       callback({
-        expense: { create: prisma.expense.create },
+        $queryRaw: vi.fn().mockResolvedValue([]),
+        expense: { create: prisma.expense.create, findMany: prisma.expense.findMany },
         simplifiedDebt: {
+          findMany: prisma.simplifiedDebt.findMany,
           deleteMany: prisma.simplifiedDebt.deleteMany,
           createMany: prisma.simplifiedDebt.createMany,
         },

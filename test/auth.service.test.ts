@@ -29,9 +29,19 @@ function createInMemoryUserRepository(initialUsers: User[] = []): UserRepository
     ),
     findByIdentifier: vi.fn(async () => null),
     create: vi.fn(async ({ name, username, email }) => {
-      const user = { id: `user-${users.length + 1}`, name, username, email };
+      const user = { id: `user-${users.length + 1}`, name, username, email, avatarUrl: null };
       users.push(user);
       return user;
+    }),
+    updateProfile: vi.fn(async (id, data) => {
+      const userIndex = users.findIndex((user) => user.id === id);
+      if (userIndex === -1) {
+        throw new Error("User not found");
+      }
+
+      const updatedUser = { ...users[userIndex], ...data };
+      users[userIndex] = updatedUser;
+      return updatedUser;
     }),
   };
 }
@@ -50,6 +60,8 @@ function createInMemoryParticipantRepository(
     findAttendanceByEventIdAndUserId: vi.fn(),
     createAnonymous: vi.fn(),
     updateAttendance: vi.fn(),
+    updateLastReadAt: vi.fn(),
+    findParticipationsByUserId: vi.fn(),
   };
 }
 
@@ -100,6 +112,7 @@ describe("AuthService.register", () => {
         name: registerDTO.name,
         username: registerDTO.username,
         email: registerDTO.email,
+        avatarUrl: null,
       },
       token: "token:user-1",
     });
@@ -117,7 +130,13 @@ describe("AuthService.register", () => {
   it("rechaza un username de otra cuenta sin hashear ni crear", async () => {
     const { service, participantRepository, userRepository, passwordHasher } = makeService({
       users: [
-        { id: "user-existing", name: "Ana", username: registerDTO.username, email: "other@x.com" },
+        {
+          id: "user-existing",
+          name: "Ana",
+          username: registerDTO.username,
+          email: "other@x.com",
+          avatarUrl: null,
+        },
       ],
     });
 
@@ -142,7 +161,15 @@ describe("AuthService.register", () => {
 
   it("rechaza un email registrado sin hashear ni crear", async () => {
     const { service, userRepository, passwordHasher } = makeService({
-      users: [{ id: "user-existing", name: "Ana", username: "other", email: registerDTO.email }],
+      users: [
+        {
+          id: "user-existing",
+          name: "Ana",
+          username: "other",
+          email: registerDTO.email,
+          avatarUrl: null,
+        },
+      ],
     });
 
     await expect(service.register(registerDTO)).rejects.toBeInstanceOf(RegistrationConflictError);
@@ -165,6 +192,7 @@ describe("AuthService.register", () => {
       name: "Ana",
       username: "ana",
       email: "ana@planify.dev",
+      avatarUrl: null,
       passwordHash: "stored-hash",
     });
     vi.mocked(passwordHasher.compare).mockResolvedValueOnce(true);

@@ -3,6 +3,7 @@ dist/
 .env
 coverage/
 kpi-reporter/output/
+uploads/
 .DS_Store
 .idea/
 .vscode/

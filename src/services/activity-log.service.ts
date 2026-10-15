@@ -12,9 +12,27 @@ import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { NotFoundError } from "../shared/errors/index.js";
 import { validateEventId } from "../shared/event-id.js";
 
+export interface UnreadEventCount {
+  eventId: string;
+  groupId: string;
+  unreadCount: number;
+}
+
+export interface UnreadGroupCount {
+  groupId: string;
+  unreadCount: number;
+}
+
+export interface UnreadCounts {
+  events: UnreadEventCount[];
+  groups: UnreadGroupCount[];
+}
+
 export interface ActivityLogService {
   record(params: CreateActivityLogParams): Promise<void>;
   list(eventId: string, actor: AttendanceActor): Promise<ActivityLogEntry[]>;
+  markAsRead(eventId: string, actor: AttendanceActor): Promise<void>;
+  getUnreadCounts(userId: string): Promise<UnreadCounts>;
 }
 
 export function createActivityLogService(
@@ -65,6 +83,39 @@ export function createActivityLogService(
       await resolveParticipant(eventId, actor);
 
       return activityLogRepository.findByEventId(eventId);
+    },
+
+    async markAsRead(eventId, actor) {
+      validateEventId(eventId);
+      await ensureEventExists(eventId);
+      const participant = await resolveParticipant(eventId, actor);
+
+      await participantRepository.updateLastReadAt(participant.id, new Date());
+    },
+
+    async getUnreadCounts(userId) {
+      const participations = await participantRepository.findParticipationsByUserId(userId);
+      const events = await Promise.all(
+        participations.map(async ({ participantId, eventId, groupId, lastReadAt }) => ({
+          eventId,
+          groupId,
+          unreadCount: await activityLogRepository.countUnread({
+            eventId,
+            since: lastReadAt,
+            excludeActorParticipantId: participantId,
+          }),
+        })),
+      );
+      const groupCounts = new Map<string, number>();
+
+      for (const { groupId, unreadCount } of events) {
+        groupCounts.set(groupId, (groupCounts.get(groupId) ?? 0) + unreadCount);
+      }
+
+      return {
+        events,
+        groups: Array.from(groupCounts, ([groupId, unreadCount]) => ({ groupId, unreadCount })),
+      };
     },
   };
 }

@@ -21,6 +21,7 @@ function toPublicUser(user: UserWithPassword): User {
     name: user.name,
     username: user.username,
     email: user.email,
+    avatarUrl: user.avatarUrl,
   };
 }
 
@@ -59,10 +60,21 @@ function createInMemoryUserRepository(): UserRepository {
         name,
         username,
         email,
+        avatarUrl: null,
         passwordHash,
       };
       users.push(user);
       return toPublicUser(user);
+    },
+    async updateProfile(id, data) {
+      const userIndex = users.findIndex((user) => user.id === id);
+      if (userIndex === -1) {
+        throw new Error("User not found");
+      }
+
+      const updatedUser = { ...users[userIndex], ...data };
+      users[userIndex] = updatedUser;
+      return toPublicUser(updatedUser);
     },
   };
 }
@@ -91,6 +103,12 @@ const participantRepository: ParticipantRepository = {
   },
   async updateAttendance() {
     throw new Error("Not used in authentication tests");
+  },
+  async updateLastReadAt() {
+    throw new Error("Not used in authentication tests");
+  },
+  async findParticipationsByUserId() {
+    return [];
   },
 };
 

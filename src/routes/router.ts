@@ -9,6 +9,7 @@ import tasksRouter from "./tasks.js";
 import balancesRouter from "./balances.js";
 import activityLogRouter from "./activity-log.js";
 import { createInternalKpisRouter } from "./internal-kpis.js";
+import profileRouter from "./profile.js";
 import { RouteNotFoundError } from "../shared/errors/index.js";
 import type { HttpMetricsAccumulator } from "../services/http-metrics-accumulator.js";
 
@@ -22,6 +23,7 @@ export function createRouter(httpMetricsAccumulator: HttpMetricsAccumulator): Ro
   router.use(tasksRouter);
   router.use(balancesRouter);
   router.use(activityLogRouter);
+  router.use(profileRouter);
   router.use(createInternalKpisRouter(httpMetricsAccumulator));
 
   // Handler 404 para cualquier ruta no mapeada

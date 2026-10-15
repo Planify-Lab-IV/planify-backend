@@ -9,7 +9,13 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     event: { findUnique: vi.fn() },
     eventParticipant: { findUnique: vi.fn(), findFirst: vi.fn() },
-    task: { findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+    task: {
+      findUnique: vi.fn(),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+      update: vi.fn(),
+    },
     activityLog: { create: vi.fn(), findMany: vi.fn() },
   },
 }));
@@ -112,7 +118,8 @@ describe("rutas de tareas", () => {
     const claimedTask = { ...task, status: "pending", assignedToParticipantId: participant.id };
     vi.mocked(prisma.task.findUnique).mockResolvedValueOnce(task as never);
     vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(participant as never);
-    vi.mocked(prisma.task.update).mockResolvedValueOnce(claimedTask as never);
+    vi.mocked(prisma.task.updateMany).mockResolvedValueOnce({ count: 1 } as never);
+    vi.mocked(prisma.task.findUnique).mockResolvedValueOnce(claimedTask as never);
 
     const response = await request(app)
       .post(`/tasks/${task.id}/claim`)
@@ -121,6 +128,17 @@ describe("rutas de tareas", () => {
     expect(response.status).toBe(200);
     expect(response.body.status).toBe("pending");
     expect(response.body.assignedToParticipantId).toBe(participant.id);
+    expect(prisma.task.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: task.id,
+        status: "unassigned",
+        assignedToParticipantId: null,
+      },
+      data: {
+        status: "pending",
+        assignedToParticipantId: participant.id,
+      },
+    });
   });
 
   it("rechaza tomar una tarea que ya tiene dueño", async () => {
@@ -130,6 +148,7 @@ describe("rutas de tareas", () => {
       assignedToParticipantId: "participant-other",
     } as never);
     vi.mocked(prisma.eventParticipant.findFirst).mockResolvedValueOnce(participant as never);
+    vi.mocked(prisma.task.updateMany).mockResolvedValueOnce({ count: 0 } as never);
 
     const response = await request(app)
       .post(`/tasks/${task.id}/claim`)
@@ -137,7 +156,17 @@ describe("rutas de tareas", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe("INVALID_DATA");
-    expect(prisma.task.update).not.toHaveBeenCalled();
+    expect(prisma.task.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: task.id,
+        status: "unassigned",
+        assignedToParticipantId: null,
+      },
+      data: {
+        status: "pending",
+        assignedToParticipantId: participant.id,
+      },
+    });
   });
 
   it("permite al organizador asignar una tarea", async () => {
