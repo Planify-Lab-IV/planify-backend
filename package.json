@@ -12,6 +12,7 @@
     "clean": "rm -rf node_modules package-lock.json && npm install",
     "clean-w": "rimraf node_modules package-lock.json && npm install",
     "dev": "tsx watch src/index.ts",
+    "typecheck:kpi-reporter": "tsc --noEmit --project tsconfig.kpi-reporter.json",
     "kpis:report": "tsx kpi-reporter/report.ts",
     "kpis:catalog": "tsx kpi-reporter/register-catalog.ts",
     "build": "prisma generate && tsc",

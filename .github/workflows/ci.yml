@@ -50,6 +50,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Type check KPI reporter
+        run: npm run typecheck:kpi-reporter
+
       - name: Generate Prisma Client
         run: npx prisma generate
 
