@@ -15,6 +15,7 @@ describe("UserRepository.findByUsername", () => {
     name: "Ana",
     username: "ana",
     email: "ana@planify.dev",
+    avatarUrl: null,
   };
 
   beforeEach(() => vi.clearAllMocks());
@@ -26,7 +27,7 @@ describe("UserRepository.findByUsername", () => {
 
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { username: user.username },
-      select: { id: true, name: true, username: true, email: true },
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
   });
 });

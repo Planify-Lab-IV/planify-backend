@@ -21,6 +21,7 @@ describe("POST /auth/login", () => {
     name: "Dev One",
     username: "dev1",
     email: "dev1@planify.dev",
+    avatarUrl: null,
     passwordHash: bcrypt.hashSync(password, 10),
   };
 
@@ -41,6 +42,7 @@ describe("POST /auth/login", () => {
         name: userInDatabase.name,
         username: userInDatabase.username,
         email: userInDatabase.email,
+        avatarUrl: null,
       },
       token: expect.any(String),
     });
@@ -78,6 +80,7 @@ describe("GET /auth/me", () => {
     name: "Dev One",
     username: "dev1",
     email: "dev1@planify.dev",
+    avatarUrl: null,
   };
   const tokenService = createSessionTokenService(env.JWT_SECRET);
 
@@ -96,7 +99,7 @@ describe("GET /auth/me", () => {
     expect(response.body.user).not.toHaveProperty("passwordHash");
     expect(prisma.user.findUnique).toHaveBeenCalledWith({
       where: { id: user.id },
-      select: { id: true, name: true, username: true, email: true },
+      select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });
   });
 

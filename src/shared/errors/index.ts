@@ -36,6 +36,13 @@ export class UnauthorizedError extends AppError {
   }
 }
 
+export class AvatarStorageUnavailableError extends AppError {
+  constructor() {
+    super("El almacenamiento de avatares no está disponible", 503, "AVATAR_STORAGE_UNAVAILABLE");
+    this.name = "AvatarStorageUnavailableError";
+  }
+}
+
 // --> Maneja el caso donde un usuario autenticado intenta ingresar a un grupo que no pertenece
 export class ForbiddenError extends AppError {
   constructor(message = "Acceso denegado") {

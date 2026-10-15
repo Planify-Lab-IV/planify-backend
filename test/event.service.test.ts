@@ -97,6 +97,7 @@ const unusedUserRepository: UserRepository = {
   findPublicByIdentifier: vi.fn(),
   findByIdentifier: vi.fn(),
   create: vi.fn(),
+  updateProfile: vi.fn(),
 };
 
 const unusedParticipantRepository: ParticipantRepository = {
