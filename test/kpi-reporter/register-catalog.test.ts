@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { KPI_CATALOG } from "../../kpi-reporter/catalog.js";
 import type { Lab4CatalogClient, Lab4CatalogProject } from "../../kpi-reporter/catalog-client.js";
-import { registerKpiCatalog } from "../../kpi-reporter/register-catalog.js";
+import {
+  readRegisterCatalogConfig,
+  registerKpiCatalog,
+} from "../../kpi-reporter/register-catalog.js";
 
 const project: Lab4CatalogProject = {
   teamNumber: 1,
@@ -78,6 +81,49 @@ describe("registro del catálogo de KPIs", () => {
 
     expect(testSetup.client.createCatalogEntries).not.toHaveBeenCalled();
   });
+
+  it.each(["dev", "qa", "prod"])("lee la configuración para el ambiente %s", (environment) => {
+    expect(
+      readRegisterCatalogConfig({
+        KPI_TARGET_ENV: environment,
+        SUPABASE_URL: "https://lab4.example",
+        SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+        PROJECT_KEY: "project-key",
+      }),
+    ).toMatchObject({
+      expectedEnvironment: environment,
+      supabaseUrl: "https://lab4.example",
+      supabasePublishableKey: "publishable-key",
+      projectKey: "project-key",
+    });
+  });
+
+  it("rechaza un ambiente inválido antes de registrar", () => {
+    expect(() =>
+      readRegisterCatalogConfig({
+        KPI_TARGET_ENV: "staging",
+        SUPABASE_URL: "https://lab4.example",
+        SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+        PROJECT_KEY: "project-key",
+      }),
+    ).toThrow("KPI_TARGET_ENV debe ser dev, qa o prod");
+  });
+
+  it.each(["KPI_TARGET_ENV", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY", "PROJECT_KEY"])(
+    "rechaza si falta %s",
+    (missingVariable) => {
+      const environmentVariables = {
+        KPI_TARGET_ENV: "dev",
+        SUPABASE_URL: "https://lab4.example",
+        SUPABASE_PUBLISHABLE_KEY: "publishable-key",
+        PROJECT_KEY: "project-key",
+      };
+
+      delete environmentVariables[missingVariable as keyof typeof environmentVariables];
+
+      expect(() => readRegisterCatalogConfig(environmentVariables)).toThrow(missingVariable);
+    },
+  );
 });
 
 function createTestSetup({

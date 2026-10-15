@@ -13,6 +13,7 @@
     "clean-w": "rimraf node_modules package-lock.json && npm install",
     "dev": "tsx watch src/index.ts",
     "kpis:report": "tsx kpi-reporter/report.ts",
+    "kpis:catalog": "tsx kpi-reporter/register-catalog.ts",
     "build": "prisma generate && tsc",
     "start": "node dist/index.js",
     "db:seed": "prisma db seed",

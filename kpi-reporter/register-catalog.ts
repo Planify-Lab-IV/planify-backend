@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { KPI_CATALOG, type KpiId } from "./catalog.js";
 import { createLab4CatalogClient, type Lab4CatalogProject } from "./catalog-client.js";
 import type { KpiEnvironment } from "./measurements.js";
@@ -56,6 +57,26 @@ export async function registerKpiCatalog({
   };
 }
 
+export function readRegisterCatalogConfig(
+  environmentVariables: NodeJS.ProcessEnv = process.env,
+): RegisterKpiCatalogOptions {
+  const expectedEnvironment = requireEnvironmentVariable(environmentVariables, "KPI_TARGET_ENV");
+
+  if (!isKpiEnvironment(expectedEnvironment)) {
+    throw new Error("KPI_TARGET_ENV debe ser dev, qa o prod");
+  }
+
+  return {
+    supabaseUrl: requireEnvironmentVariable(environmentVariables, "SUPABASE_URL"),
+    supabasePublishableKey: requireEnvironmentVariable(
+      environmentVariables,
+      "SUPABASE_PUBLISHABLE_KEY",
+    ),
+    projectKey: requireEnvironmentVariable(environmentVariables, "PROJECT_KEY"),
+    expectedEnvironment,
+  };
+}
+
 function validateProjectEnvironment(
   project: Lab4CatalogProject | null,
   expectedEnvironment: KpiEnvironment,
@@ -69,4 +90,36 @@ function validateProjectEnvironment(
       `La PROJECT_KEY corresponde al ambiente ${project.environment}, no a ${expectedEnvironment}`,
     );
   }
+}
+
+function requireEnvironmentVariable(environmentVariables: NodeJS.ProcessEnv, name: string): string {
+  const value = environmentVariables[name];
+
+  if (!value) {
+    throw new Error(`${name} es requerida para registrar el catálogo de KPIs`);
+  }
+
+  return value;
+}
+
+function isKpiEnvironment(value: string): value is KpiEnvironment {
+  return value === "dev" || value === "qa" || value === "prod";
+}
+
+function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value));
+}
+
+async function main(): Promise<void> {
+  const result = await registerKpiCatalog(readRegisterCatalogConfig());
+  console.log(
+    `Catálogo de ${result.environment} listo: ${result.createdKpiIds.length} KPIs creados y ${result.existingKpiIds.length} ya existentes.`,
+  );
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main().catch((error: unknown) => {
+    console.error(toError(error));
+    process.exitCode = 1;
+  });
 }
