@@ -249,3 +249,12 @@ model ActivityLog {
   @@index([eventId, createdAt])
   @@map("log_actividad")
 }
+
+model HttpDailyMetric {
+  date DateTime @id @db.Date @map("fecha")
+  requestCount Int @default(0) @map("cantidad_requests")
+  serverErrorCount Int @default(0) @map("cantidad_respuestas_5xx")
+  responseDurationMs BigInt @default(0) @map("suma_tiempos_respuesta_ms")
+
+  @@map("metricas_http_diarias")
+}

@@ -18,6 +18,8 @@ const envSchema = z
     AVATAR_STORAGE: z.enum(["local", "s3"]).optional(),
     AVATAR_S3_BUCKET: z.string().trim().min(1).optional(),
     AWS_REGION: z.string().trim().min(1).optional(),
+    // --> Valida que la key JWT sea de al menos 32 caracteres como string
+    INTERNAL_KPIS_TOKEN: z.string().min(32).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.AVATAR_STORAGE !== "s3") {
