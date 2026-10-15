@@ -23,8 +23,9 @@ permissions:
   actions: read
   issues: write
 
+# dev y prod consultan la misma API y la misma base: nunca generar en paralelo.
 concurrency:
-  group: kpi-report-${{ inputs.target_env || 'prod' }}
+  group: kpi-report-with-activity
   cancel-in-progress: false
 
 jobs:
@@ -32,7 +33,7 @@ jobs:
     name: Report KPIs
     runs-on: ubuntu-latest
     environment: kpis-${{ inputs.target_env || 'prod' }}
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -47,17 +48,37 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Report KPIs to Lab4
-        run: npm run kpis:report
+      - name: Generate labeled activity and report KPIs
         env:
           KPI_TARGET_ENV: ${{ inputs.target_env || 'prod' }}
           KPI_REPORT_DATE: ${{ inputs.date }}
           PLANIFY_API_URL: ${{ vars.PLANIFY_API_URL }}
+          KPI_BOT_IDENTIFIER: ${{ vars.KPI_BOT_IDENTIFIER }}
+          KPI_BOT_MEMBER_IDENTIFIER: ${{ vars.KPI_BOT_MEMBER_IDENTIFIER }}
+          KPI_BOT_PASSWORD: ${{ secrets.KPI_BOT_PASSWORD }}
           INTERNAL_KPIS_TOKEN: ${{ secrets.INTERNAL_KPIS_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ vars.SUPABASE_PUBLISHABLE_KEY }}
           PROJECT_KEY: ${{ secrets.PROJECT_KEY }}
+        run: |
+          set -euo pipefail
+
+          ready=false
+          for attempt in {1..20}; do
+            if curl --silent --fail --max-time 5 "$PLANIFY_API_URL/health" > /dev/null; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          if [[ "$ready" != true ]]; then
+            echo "La API no respondió en PLANIFY_API_URL."
+            exit 1
+          fi
+
+          node kpi-reporter/seed-activity.mjs
+          npm run kpis:report
 
       - name: Upload KPI report artifact
         if: always()
