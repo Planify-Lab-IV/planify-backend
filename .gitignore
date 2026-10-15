@@ -2,6 +2,7 @@ node_modules/
 dist/
 .env
 coverage/
+kpi-reporter/output/
 .DS_Store
 .idea/
 .vscode/
