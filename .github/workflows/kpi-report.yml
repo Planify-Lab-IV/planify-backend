@@ -78,7 +78,7 @@ jobs:
           fi
 
           node kpi-reporter/seed-activity.mjs
-          npm run kpis:report
+          npx tsx kpi-reporter/seed-activity.ts
 
       - name: Upload KPI report artifact
         if: always()
