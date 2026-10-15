@@ -8,7 +8,10 @@ import type { AvatarStorage } from "../src/infrastructure/storage/avatar.storage
 import { createLocalAvatarStorage } from "../src/infrastructure/storage/local-avatar.storage.js";
 import type { User, UserRepository } from "../src/repositories/user.repository.js";
 import { createProfileRouter } from "../src/routes/profile.js";
-import { createProfileService } from "../src/services/profile.service.js";
+import {
+  createProfileService,
+  type ProfileUpdateCoordinator,
+} from "../src/services/profile.service.js";
 import { createSessionTokenService } from "../src/infrastructure/security/session.token.service.js";
 import { errorHandler } from "../src/shared/middlewares/error.middleware.js";
 import { createAuthMiddleware } from "../src/shared/middlewares/auth.middleware.js";
@@ -64,9 +67,18 @@ function createAvatarStorage(): AvatarStorage {
   };
 }
 
-function createApp(avatarStorage: AvatarStorage | null, uploadsDirectory?: string) {
-  const userRepository = createInMemoryUserRepository();
-  const profileService = createProfileService(userRepository, avatarStorage);
+function createApp(
+  avatarStorage: AvatarStorage | null,
+  uploadsDirectory?: string,
+  initialUser: User = user,
+  profileUpdateCoordinator?: ProfileUpdateCoordinator,
+) {
+  const userRepository = createInMemoryUserRepository(initialUser);
+  const profileService = createProfileService(
+    userRepository,
+    avatarStorage,
+    profileUpdateCoordinator,
+  );
   const app = express();
 
   app.use(express.json());
@@ -123,6 +135,44 @@ describe("PATCH /me/profile", () => {
     const imageResponse = await request(app).get(response.body.user.avatarUrl);
     expect(imageResponse.status).toBe(200);
     expect(imageResponse.body).toEqual(expect.any(Buffer));
+  });
+
+  it("serializa dos reemplazos concurrentes y elimina el avatar intermedio", async () => {
+    const avatarStorage: AvatarStorage = {
+      save: vi
+        .fn<AvatarStorage["save"]>()
+        .mockResolvedValueOnce("/uploads/avatars/first.png")
+        .mockResolvedValueOnce("/uploads/avatars/second.png"),
+      remove: vi.fn<AvatarStorage["remove"]>().mockResolvedValue(),
+    };
+    const initialUser = { ...user, avatarUrl: "/uploads/avatars/old.png" };
+    const { app, userRepository } = createApp(
+      avatarStorage,
+      undefined,
+      initialUser,
+      createSerialProfileUpdateCoordinator(),
+    );
+
+    const responses = await Promise.all([
+      authenticatedRequest(app).attach("avatar", validPng, {
+        filename: "first.png",
+        contentType: "image/png",
+      }),
+      authenticatedRequest(app).attach("avatar", validPng, {
+        filename: "second.png",
+        contentType: "image/png",
+      }),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([200, 200]);
+    expect(userRepository.updateProfile).toHaveBeenNthCalledWith(1, user.id, {
+      avatarUrl: "/uploads/avatars/first.png",
+    });
+    expect(userRepository.updateProfile).toHaveBeenNthCalledWith(2, user.id, {
+      avatarUrl: "/uploads/avatars/second.png",
+    });
+    expect(avatarStorage.remove).toHaveBeenNthCalledWith(1, "/uploads/avatars/old.png");
+    expect(avatarStorage.remove).toHaveBeenNthCalledWith(2, "/uploads/avatars/first.png");
   });
 
   it.each([
@@ -214,4 +264,31 @@ async function createTemporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), "planify-profile-uploads-"));
   temporaryDirectories.push(directory);
   return directory;
+}
+
+function createSerialProfileUpdateCoordinator(): ProfileUpdateCoordinator {
+  const tails = new Map<string, Promise<void>>();
+
+  return {
+    async runExclusive<T>(userId: string, operation: () => Promise<T>): Promise<T> {
+      const previous = tails.get(userId) ?? Promise.resolve();
+      let release: () => void;
+      const completion = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const next = previous.then(() => completion);
+      tails.set(userId, next);
+
+      await previous;
+
+      try {
+        return await operation();
+      } finally {
+        release!();
+        if (tails.get(userId) === next) {
+          tails.delete(userId);
+        }
+      }
+    },
+  };
 }

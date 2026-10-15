@@ -32,9 +32,20 @@ export interface ProfileService {
   updateProfile(userId: string, input: UpdateProfileInput): Promise<User>;
 }
 
+export interface ProfileUpdateCoordinator {
+  runExclusive<T>(userId: string, operation: () => Promise<T>): Promise<T>;
+}
+
+const directProfileUpdateCoordinator: ProfileUpdateCoordinator = {
+  runExclusive(_userId, operation) {
+    return operation();
+  },
+};
+
 export function createProfileService(
   userRepository: UserRepository,
   avatarStorage: AvatarStorage | null,
+  profileUpdateCoordinator: ProfileUpdateCoordinator = directProfileUpdateCoordinator,
 ): ProfileService {
   return {
     async updateProfile(userId, input) {
@@ -51,48 +62,55 @@ export function createProfileService(
         throw new AvatarStorageUnavailableError();
       }
 
-      const currentUser = await userRepository.findById(userId);
-      if (!currentUser) {
-        throw new UnauthorizedError("La sesión ya no corresponde a un usuario activo");
-      }
-
-      let newAvatarUrl: string | undefined;
-
+      let avatar: AvatarUpload | undefined;
       if (hasAvatar) {
-        const avatar = input.avatar;
-        if (!isAvatarUpload(avatar)) {
+        const uploadedAvatar = input.avatar;
+        if (!isAvatarUpload(uploadedAvatar)) {
           throw new ValidationError("El avatar es inválido");
         }
 
-        newAvatarUrl = await avatarStorage!.save(await validateAvatar(avatar));
+        avatar = await validateAvatar(uploadedAvatar);
       }
 
-      try {
-        const updatedUser = await userRepository.updateProfile(
-          userId,
-          createUpdateData(name, newAvatarUrl),
-        );
-
-        if (newAvatarUrl && currentUser.avatarUrl) {
-          try {
-            await avatarStorage!.remove(currentUser.avatarUrl);
-          } catch (error) {
-            console.error("No se pudo borrar el avatar anterior", error);
-          }
+      return profileUpdateCoordinator.runExclusive(userId, async () => {
+        const currentUser = await userRepository.findById(userId);
+        if (!currentUser) {
+          throw new UnauthorizedError("La sesión ya no corresponde a un usuario activo");
         }
 
-        return updatedUser;
-      } catch (error) {
-        if (newAvatarUrl) {
-          try {
-            await avatarStorage!.remove(newAvatarUrl);
-          } catch (cleanupError) {
-            console.error("No se pudo limpiar el avatar nuevo tras un error", cleanupError);
-          }
+        let newAvatarUrl: string | undefined;
+
+        if (avatar) {
+          newAvatarUrl = await avatarStorage!.save(avatar);
         }
 
-        throw error;
-      }
+        try {
+          const updatedUser = await userRepository.updateProfile(
+            userId,
+            createUpdateData(name, newAvatarUrl),
+          );
+
+          if (newAvatarUrl && currentUser.avatarUrl) {
+            try {
+              await avatarStorage!.remove(currentUser.avatarUrl);
+            } catch (error) {
+              console.error("No se pudo borrar el avatar anterior", error);
+            }
+          }
+
+          return updatedUser;
+        } catch (error) {
+          if (newAvatarUrl) {
+            try {
+              await avatarStorage!.remove(newAvatarUrl);
+            } catch (cleanupError) {
+              console.error("No se pudo limpiar el avatar nuevo tras un error", cleanupError);
+            }
+          }
+
+          throw error;
+        }
+      });
     },
   };
 }

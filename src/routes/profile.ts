@@ -11,6 +11,7 @@ import {
 } from "../infrastructure/storage/avatar.storage.js";
 import { createLocalAvatarStorage } from "../infrastructure/storage/local-avatar.storage.js";
 import { createS3AvatarStorage } from "../infrastructure/storage/s3-avatar.storage.js";
+import { createPostgresProfileUpdateCoordinator } from "../infrastructure/profile-update.coordinator.js";
 import { userRepository } from "../repositories/user.repository.js";
 import { createProfileService, type ProfileService } from "../services/profile.service.js";
 import { ValidationError } from "../shared/errors/index.js";
@@ -91,6 +92,10 @@ function createAvatarStorage(): AvatarStorage | null {
 
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
 const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService);
-const profileService = createProfileService(userRepository, createAvatarStorage());
+const profileService = createProfileService(
+  userRepository,
+  createAvatarStorage(),
+  createPostgresProfileUpdateCoordinator(),
+);
 
 export default createProfileRouter(profileService, requireAuthenticatedUser);
