@@ -1,5 +1,6 @@
 import type { HttpMetricsRepository } from "../repositories/http-metrics.repository.js";
 import type { KpiRepository } from "../repositories/kpi.repository.js";
+import type { HttpMetricsAccumulator } from "./http-metrics-accumulator.js";
 
 export interface InternalKpis {
   events_created_month_to_date: number;
@@ -17,9 +18,12 @@ export interface KpiService {
 export function createKpiService(
   kpiRepository: KpiRepository,
   httpMetricsRepository: HttpMetricsRepository,
+  httpMetricsAccumulator: HttpMetricsAccumulator,
 ): KpiService {
   return {
     async getInternalKpis(day: string): Promise<InternalKpis> {
+      await httpMetricsAccumulator.flush();
+
       const [
         eventsCreatedMonthToDate,
         eventsWithMultipleParticipants,

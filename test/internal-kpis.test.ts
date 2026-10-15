@@ -30,7 +30,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
   },
 }));
 
-import app from "../src/app.js";
+import app, { httpMetricsAccumulator } from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
 
 describe("GET /internal/kpis", () => {
@@ -80,6 +80,52 @@ describe("GET /internal/kpis", () => {
       http_5xx_responses: 0,
       http_response_time_total_ms: 0,
     });
+  });
+
+  it("vuelca las métricas HTTP pendientes antes de responder", async () => {
+    let storedHttpMetrics = {
+      requestCount: 0,
+      serverErrorCount: 0,
+      responseDurationMs: 0n,
+    };
+    vi.mocked(prisma.httpDailyMetric.upsert).mockImplementation(async ({ create, update }) => {
+      if (storedHttpMetrics.requestCount === 0) {
+        storedHttpMetrics = {
+          requestCount: create.requestCount,
+          serverErrorCount: create.serverErrorCount,
+          responseDurationMs: create.responseDurationMs,
+        };
+      } else {
+        storedHttpMetrics = {
+          requestCount: storedHttpMetrics.requestCount + update.requestCount.increment,
+          serverErrorCount: storedHttpMetrics.serverErrorCount + update.serverErrorCount.increment,
+          responseDurationMs:
+            storedHttpMetrics.responseDurationMs + update.responseDurationMs.increment,
+        };
+      }
+
+      return storedHttpMetrics;
+    });
+    vi.mocked(prisma.httpDailyMetric.findUnique).mockImplementation(async () => storedHttpMetrics);
+    vi.mocked(prisma.event.count).mockResolvedValue(0);
+    vi.mocked(prisma.eventParticipant.groupBy).mockResolvedValue([]);
+    httpMetricsAccumulator.record("2026-10-12", {
+      requestCount: 1,
+      serverErrorCount: 1,
+      responseDurationMs: 75n,
+    });
+
+    const response = await request(app)
+      .get("/internal/kpis?date=2026-10-12")
+      .set("X-Internal-Token", internalKpisToken);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      http_requests: 1,
+      http_5xx_responses: 1,
+      http_response_time_total_ms: 75,
+    });
+    expect(prisma.httpDailyMetric.upsert).toHaveBeenCalledOnce();
   });
 
   it("responde 400 ante una fecha inválida o futura", async () => {

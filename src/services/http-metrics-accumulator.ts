@@ -20,26 +20,28 @@ export function createHttpMetricsAccumulator(
   }
 
   async function flushPending(): Promise<void> {
-    const snapshot = pendingByDay;
-    pendingByDay = new Map();
-    const entries = [...snapshot.entries()];
+    while (pendingByDay.size > 0) {
+      const snapshot = pendingByDay;
+      pendingByDay = new Map();
+      const entries = [...snapshot.entries()];
 
-    for (let index = 0; index < entries.length; index += 1) {
-      const entry = entries[index];
-      if (!entry) continue;
+      for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
+        if (!entry) continue;
 
-      const [day, delta] = entry;
+        const [day, delta] = entry;
 
-      try {
-        await repository.addDailyMetrics(day, delta);
-      } catch (error) {
-        for (const remainingEntry of entries.slice(index)) {
-          if (remainingEntry) {
-            addToPending(remainingEntry[0], remainingEntry[1]);
+        try {
+          await repository.addDailyMetrics(day, delta);
+        } catch (error) {
+          for (const remainingEntry of entries.slice(index)) {
+            if (remainingEntry) {
+              addToPending(remainingEntry[0], remainingEntry[1]);
+            }
           }
-        }
 
-        throw error;
+          throw error;
+        }
       }
     }
   }

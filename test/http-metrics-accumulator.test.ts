@@ -66,6 +66,33 @@ describe("HttpMetricsAccumulator", () => {
     expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(3, "2026-10-13", metrics(2, 1, 20n));
   });
 
+  it("también guarda los incrementos registrados durante un flush en curso", async () => {
+    const repository = createRepository();
+    let resolveFirstWrite: (() => void) | undefined;
+    const firstWriteStarted = new Promise<void>((resolve) => {
+      vi.mocked(repository.addDailyMetrics).mockImplementationOnce(async () => {
+        resolve();
+        await new Promise<void>((complete) => {
+          resolveFirstWrite = complete;
+        });
+      });
+    });
+    const accumulator = createHttpMetricsAccumulator(repository);
+
+    accumulator.record("2026-10-12", metrics(1, 0, 25n));
+    const flush = accumulator.flush();
+
+    await firstWriteStarted;
+    accumulator.record("2026-10-12", metrics(2, 1, 75n));
+    resolveFirstWrite?.();
+
+    await flush;
+
+    expect(repository.addDailyMetrics).toHaveBeenCalledTimes(2);
+    expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(1, "2026-10-12", metrics(1, 0, 25n));
+    expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(2, "2026-10-12", metrics(2, 1, 75n));
+  });
+
   it("rechaza incrementos inválidos antes de acumularlos", () => {
     const accumulator = createHttpMetricsAccumulator(createRepository());
 
