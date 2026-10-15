@@ -4,7 +4,11 @@ import {
   shutdownHttpMetrics,
   startHttpMetricsPeriodicFlush,
 } from "../src/services/http-metrics-lifecycle.js";
-import type { HttpMetricsAccumulator } from "../src/services/http-metrics-accumulator.js";
+import {
+  createHttpMetricsAccumulator,
+  type HttpMetricsAccumulator,
+} from "../src/services/http-metrics-accumulator.js";
+import type { HttpMetricsRepository } from "../src/repositories/http-metrics.repository.js";
 
 describe("ciclo de vida de métricas HTTP", () => {
   afterEach(() => {
@@ -56,6 +60,47 @@ describe("ciclo de vida de métricas HTTP", () => {
 
     expect(accumulator.flush).toHaveBeenCalledOnce();
   });
+
+  it("espera el flush activo y persiste las requests que terminan durante el cierre", async () => {
+    const repository = createRepository();
+    let releaseActiveFlush: (() => void) | undefined;
+    let notifyActiveFlushStarted: (() => void) | undefined;
+    const activeFlushStarted = new Promise<void>((resolve) => {
+      notifyActiveFlushStarted = resolve;
+    });
+    vi.mocked(repository.addDailyMetrics).mockImplementationOnce(async () => {
+      notifyActiveFlushStarted?.();
+      await new Promise<void>((resolve) => {
+        releaseActiveFlush = resolve;
+      });
+    });
+    const accumulator = createHttpMetricsAccumulator(repository);
+    const day = "2026-10-12";
+
+    accumulator.record(day, metrics(1, 0, 25n));
+    const activeFlush = accumulator.flush();
+    await activeFlushStarted;
+
+    const shutdown = shutdownHttpMetrics({
+      accumulator,
+      stopPeriodicFlush: vi.fn(),
+      server: {
+        close: (callback) => {
+          accumulator.record(day, metrics(2, 1, 75n));
+          callback();
+        },
+      },
+    });
+
+    await Promise.resolve();
+    releaseActiveFlush?.();
+    await shutdown;
+    await activeFlush;
+
+    expect(repository.addDailyMetrics).toHaveBeenCalledTimes(2);
+    expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(1, day, metrics(1, 0, 25n));
+    expect(repository.addDailyMetrics).toHaveBeenNthCalledWith(2, day, metrics(2, 1, 75n));
+  });
 });
 
 function createAccumulator(): HttpMetricsAccumulator {
@@ -63,4 +108,15 @@ function createAccumulator(): HttpMetricsAccumulator {
     record: vi.fn(),
     flush: vi.fn().mockResolvedValue(undefined),
   };
+}
+
+function createRepository(): HttpMetricsRepository {
+  return {
+    addDailyMetrics: vi.fn(),
+    findDailyMetrics: vi.fn(),
+  };
+}
+
+function metrics(requestCount: number, serverErrorCount: number, responseDurationMs: bigint) {
+  return { requestCount, serverErrorCount, responseDurationMs };
 }
