@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import type { AvatarStorage } from "../infrastructure/storage/avatar.storage.js";
 import type { User, UserRepository } from "../repositories/user.repository.js";
 import {
@@ -7,6 +8,15 @@ import {
 } from "../shared/errors/index.js";
 
 const maxNameLength = 80;
+const maxAvatarPixels = 40_000_000;
+
+const avatarMimeTypeByFormat = {
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+} as const;
+
+type AvatarFormat = keyof typeof avatarMimeTypeByFormat;
 
 export interface AvatarUpload {
   buffer: Buffer;
@@ -54,7 +64,7 @@ export function createProfileService(
           throw new ValidationError("El avatar es inválido");
         }
 
-        newAvatarUrl = await avatarStorage!.save(avatar);
+        newAvatarUrl = await avatarStorage!.save(await validateAvatar(avatar));
       }
 
       try {
@@ -109,6 +119,32 @@ function isAvatarUpload(value: unknown): value is AvatarUpload {
     "mimeType" in value &&
     typeof value.mimeType === "string"
   );
+}
+
+async function validateAvatar(avatar: AvatarUpload): Promise<AvatarUpload> {
+  try {
+    const image = sharp(avatar.buffer, {
+      failOn: "error",
+      limitInputPixels: maxAvatarPixels,
+    });
+    const metadata = await image.metadata();
+    const format = getAvatarFormat(metadata.format);
+
+    if (!format) {
+      throw new Error("Unsupported avatar format");
+    }
+
+    return {
+      buffer: await image.toFormat(format).toBuffer(),
+      mimeType: avatarMimeTypeByFormat[format],
+    };
+  } catch {
+    throw new ValidationError("El avatar debe ser una imagen JPEG, PNG o WebP válida");
+  }
+}
+
+function getAvatarFormat(format: string | undefined): AvatarFormat | null {
+  return format && format in avatarMimeTypeByFormat ? (format as AvatarFormat) : null;
 }
 
 function createUpdateData(

@@ -23,6 +23,11 @@ const user: User = {
   avatarUrl: null,
 };
 
+const validPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -102,7 +107,7 @@ describe("PATCH /me/profile", () => {
 
     const response = await authenticatedRequest(app)
       .field("name", "Ana Pérez")
-      .attach("avatar", Buffer.from("image-content"), {
+      .attach("avatar", validPng, {
         filename: "ignored-name.png",
         contentType: "image/png",
       });
@@ -117,7 +122,7 @@ describe("PATCH /me/profile", () => {
 
     const imageResponse = await request(app).get(response.body.user.avatarUrl);
     expect(imageResponse.status).toBe(200);
-    expect(imageResponse.body).toEqual(Buffer.from("image-content"));
+    expect(imageResponse.body).toEqual(expect.any(Buffer));
   });
 
   it.each([
@@ -137,6 +142,17 @@ describe("PATCH /me/profile", () => {
           contentType: "image/png",
         }),
     ],
+    ...["image/png", "image/jpeg", "image/webp"].map(
+      (contentType) =>
+        [
+          `content falsely declared as ${contentType}`,
+          (app: express.Express) =>
+            authenticatedRequest(app).attach("avatar", Buffer.from("not-an-image"), {
+              filename: "avatar.png",
+              contentType,
+            }),
+        ] as const,
+    ),
     ["an empty name", (app: express.Express) => authenticatedRequest(app).send({ name: "   " })],
     [
       "a name longer than 80 characters",
@@ -169,14 +185,10 @@ describe("PATCH /me/profile", () => {
   it("returns AVATAR_STORAGE_UNAVAILABLE without modifying the user", async () => {
     const { app, userRepository } = createApp(null);
 
-    const response = await authenticatedRequest(app).attach(
-      "avatar",
-      Buffer.from("image-content"),
-      {
-        filename: "avatar.png",
-        contentType: "image/png",
-      },
-    );
+    const response = await authenticatedRequest(app).attach("avatar", validPng, {
+      filename: "avatar.png",
+      contentType: "image/png",
+    });
 
     expect(response.status).toBe(503);
     expect(response.body.error).toBe("AVATAR_STORAGE_UNAVAILABLE");
@@ -187,12 +199,10 @@ describe("PATCH /me/profile", () => {
   it("requires an authenticated user session", async () => {
     const { app, userRepository } = createApp(createAvatarStorage());
 
-    const response = await request(app)
-      .patch("/me/profile")
-      .attach("avatar", Buffer.from("image-content"), {
-        filename: "avatar.png",
-        contentType: "image/png",
-      });
+    const response = await request(app).patch("/me/profile").attach("avatar", validPng, {
+      filename: "avatar.png",
+      contentType: "image/png",
+    });
 
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("UNAUTHORIZED");

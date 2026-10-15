@@ -16,6 +16,11 @@ const user: User = {
   avatarUrl: "/uploads/avatars/old-avatar.jpg",
 };
 
+const validPng = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQImWP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
 afterEach(() => vi.restoreAllMocks());
 
 function createInMemoryUserRepository(initialUser: User | null = user): UserRepository {
@@ -68,13 +73,16 @@ describe("ProfileService.updateProfile", () => {
     const userRepository = createInMemoryUserRepository();
     const avatarStorage = createAvatarStorage();
     const service = createProfileService(userRepository, avatarStorage);
-    const avatar = { buffer: Buffer.from("image"), mimeType: "image/png" };
+    const avatar = { buffer: validPng, mimeType: "image/png" };
 
     await expect(service.updateProfile(user.id, { avatar })).resolves.toMatchObject({
       avatarUrl: "/uploads/avatars/new-avatar.png",
     });
 
-    expect(avatarStorage.save).toHaveBeenCalledWith(avatar);
+    expect(avatarStorage.save).toHaveBeenCalledWith({
+      buffer: expect.any(Buffer),
+      mimeType: "image/png",
+    });
     expect(userRepository.updateProfile).toHaveBeenCalledWith(user.id, {
       avatarUrl: "/uploads/avatars/new-avatar.png",
     });
@@ -89,7 +97,7 @@ describe("ProfileService.updateProfile", () => {
     await expect(
       service.updateProfile(user.id, {
         name: "Ana Pérez",
-        avatar: { buffer: Buffer.from("image"), mimeType: "image/jpeg" },
+        avatar: { buffer: validPng, mimeType: "image/jpeg" },
       }),
     ).resolves.toMatchObject({
       name: "Ana Pérez",
@@ -111,7 +119,7 @@ describe("ProfileService.updateProfile", () => {
 
     await expect(
       service.updateProfile(user.id, {
-        avatar: { buffer: Buffer.from("image"), mimeType: "image/png" },
+        avatar: { buffer: validPng, mimeType: "image/png" },
       }),
     ).resolves.toMatchObject({ avatarUrl: "/uploads/avatars/new-avatar.png" });
 
@@ -150,6 +158,25 @@ describe("ProfileService.updateProfile", () => {
     expect(userRepository.updateProfile).not.toHaveBeenCalled();
   });
 
+  it.each(["image/png", "image/jpeg", "image/webp"])(
+    "rechaza contenido que solo declara ser %s sin reemplazar el avatar anterior",
+    async (mimeType) => {
+      const userRepository = createInMemoryUserRepository();
+      const avatarStorage = createAvatarStorage();
+      const service = createProfileService(userRepository, avatarStorage);
+
+      await expect(
+        service.updateProfile(user.id, {
+          avatar: { buffer: Buffer.from("no es una imagen"), mimeType },
+        }),
+      ).rejects.toBeInstanceOf(ValidationError);
+
+      expect(avatarStorage.save).not.toHaveBeenCalled();
+      expect(userRepository.updateProfile).not.toHaveBeenCalled();
+      expect(avatarStorage.remove).not.toHaveBeenCalled();
+    },
+  );
+
   it("no actualiza al usuario si guardar el avatar falla", async () => {
     const userRepository = createInMemoryUserRepository();
     const avatarStorage = createAvatarStorage();
@@ -158,7 +185,7 @@ describe("ProfileService.updateProfile", () => {
 
     await expect(
       service.updateProfile(user.id, {
-        avatar: { buffer: Buffer.from("image"), mimeType: "image/png" },
+        avatar: { buffer: validPng, mimeType: "image/png" },
       }),
     ).rejects.toThrow("Storage unavailable");
 
@@ -175,7 +202,7 @@ describe("ProfileService.updateProfile", () => {
 
     await expect(
       service.updateProfile(user.id, {
-        avatar: { buffer: Buffer.from("image"), mimeType: "image/png" },
+        avatar: { buffer: validPng, mimeType: "image/png" },
       }),
     ).rejects.toThrow("Database unavailable");
 
