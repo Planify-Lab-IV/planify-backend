@@ -7,6 +7,7 @@ import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     event: {
       findUnique: vi.fn(),
       update: vi.fn(),
@@ -50,6 +51,7 @@ describe("POST /events/:eventId/expenses", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("crea un gasto para un participante registrado", async () => {

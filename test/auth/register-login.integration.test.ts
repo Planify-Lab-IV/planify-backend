@@ -66,6 +66,15 @@ function createInMemoryUserRepository(): UserRepository {
       users.push(user);
       return toPublicUser(user);
     },
+    async updatePassword(id, passwordHash, changedAt) {
+      const userIndex = users.findIndex((user) => user.id === id);
+      if (userIndex === -1) throw new Error("User not found");
+      users[userIndex] = { ...users[userIndex], passwordHash, passwordChangedAt: changedAt };
+    },
+    async findPasswordChangedAt(id) {
+      const user = users.find((candidate) => candidate.id === id);
+      return user ? { passwordChangedAt: user.passwordChangedAt ?? null } : null;
+    },
     async updateProfile(id, data) {
       const userIndex = users.findIndex((user) => user.id === id);
       if (userIndex === -1) {

@@ -9,6 +9,7 @@ import { createTaskService } from "../services/task.service.js";
 import { createActivityLogService } from "../services/activity-log.service.js";
 import { env } from "../shared/config/env.js";
 import { createAttendanceAuthMiddleware } from "../shared/middlewares/attendance.auth.middleware.js";
+import { userRepository } from "../repositories/user.repository.js";
 
 const router = Router();
 
@@ -17,6 +18,7 @@ const requireAttendanceAuth = createAttendanceAuthMiddleware(
   sessionTokenService,
   participantRepository,
   eventRepository,
+  userRepository,
 );
 const activityLogService = createActivityLogService(
   activityLogRepository,

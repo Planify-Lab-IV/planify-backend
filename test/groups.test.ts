@@ -7,6 +7,7 @@ import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     group: {
       findMany: vi.fn(),
     },
@@ -22,6 +23,7 @@ describe("GET /me/groups", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("returns only the authenticated user's groups", async () => {
@@ -135,6 +137,7 @@ describe("GET /me/groups/overview", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("returns the authenticated user's groups with their visible events", async () => {

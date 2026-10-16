@@ -12,6 +12,7 @@ import type {
   Participant,
   ParticipantRepository,
 } from "../../src/repositories/participant.repository.js";
+import type { UserRepository } from "../../src/repositories/user.repository.js";
 
 const TEST_SECRET = "test-secret-que-cumple-con-los-32-caracteres";
 
@@ -63,19 +64,36 @@ function makeEventRepository(event: Event | null = activeEvent): EventRepository
   };
 }
 
+function makeUserRepository(passwordChangedAt: Date | null = null): UserRepository {
+  return {
+    findById: vi.fn(),
+    findByUsername: vi.fn(),
+    findByEmail: vi.fn(),
+    findPublicByIdentifier: vi.fn(),
+    findByIdentifier: vi.fn(),
+    create: vi.fn(),
+    updatePassword: vi.fn(),
+    findPasswordChangedAt: vi.fn(async () => ({ passwordChangedAt })),
+    updateProfile: vi.fn(),
+  };
+}
+
 function makeApp(
   participant: Participant | null = anonymousParticipant,
   event: Event | null = activeEvent,
+  passwordChangedAt: Date | null = null,
 ) {
   const app = express();
   const participantRepository = makeParticipantRepository(participant);
   const eventRepository = makeEventRepository(event);
+  const userRepository = makeUserRepository(passwordChangedAt);
   app.get(
     "/attendance-protected",
     createAttendanceAuthMiddleware(
       createSessionTokenService(TEST_SECRET),
       participantRepository,
       eventRepository,
+      userRepository,
     ),
     (req, res) => res.status(200).json(req.attendanceActor),
   );
@@ -93,6 +111,21 @@ describe("requireAuthenticatedAttendanceActor", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ type: "user", userId: "user-1" });
+  });
+
+  it("rechaza una sesión de usuario invalidada sin intentar validarla como participante", async () => {
+    const tokenService = createSessionTokenService(TEST_SECRET);
+    const token = tokenService.sign("user-1");
+    const issuedAt = tokenService.verify(token).issuedAt;
+
+    const response = await request(
+      makeApp(anonymousParticipant, activeEvent, new Date((issuedAt + 1) * 1000)),
+    )
+      .get("/attendance-protected")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
   });
 
   it("acepta un token de participante anónimo", async () => {

@@ -7,6 +7,7 @@ import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn() },
     eventParticipant: {
       findUnique: vi.fn(),
@@ -44,7 +45,10 @@ describe("GET /events/:eventId/activity-log", () => {
     attendanceState: "not_confirmed",
   };
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
+  });
 
   it("devuelve las entradas más recientes primero con el actor", async () => {
     const newest = {
@@ -217,7 +221,10 @@ describe("POST /events/:eventId/activity-log/read", () => {
     attendanceState: "not_confirmed",
   };
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
+  });
 
   it("marca como leído el evento para un usuario registrado", async () => {
     vi.mocked(prisma.event.findUnique).mockResolvedValueOnce(event as never);
@@ -291,7 +298,10 @@ describe("POST /events/:eventId/activity-log/read", () => {
 describe("GET /me/unread-counts", () => {
   const tokenService = createSessionTokenService(env.JWT_SECRET);
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
+  });
 
   it("devuelve conteos por evento y el acumulado por grupo, incluidos los ceros", async () => {
     vi.mocked(prisma.eventParticipant.findMany).mockResolvedValueOnce([
