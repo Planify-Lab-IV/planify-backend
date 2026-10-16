@@ -52,6 +52,12 @@ npx prisma studio
 
 [Planify Mobile](https://github.com/Planify-Lab-IV/planify-mobile)
 
+## Recuperación de contraseña
+
+El envío del código de recuperación está simulado. Con `NODE_ENV=development`, el código de seis dígitos se imprime en la consola del backend para probar el flujo localmente. En producción el código nunca se registra, por lo que el flujo todavía no es usable por una persona final hasta que PLANIFY-153 configure el proveedor de correo.
+
+Cada código vence a los 30 minutos, admite cinco intentos y una cuenta puede solicitar hasta tres códigos por hora.
+
 ### Git Flow (convenciones a seguir a la hora de nombrar una branch)
 
 - `feature/PLANIFY-<n>-descripcion` → `develop`
