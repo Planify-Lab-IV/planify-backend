@@ -91,7 +91,7 @@ function createAvatarStorage(): AvatarStorage | null {
 }
 
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
-const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService);
+const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService, userRepository);
 const profileService = createProfileService(
   userRepository,
   createAvatarStorage(),

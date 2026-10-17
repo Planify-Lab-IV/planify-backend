@@ -7,6 +7,7 @@ import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn() },
     invitation: { create: vi.fn(), findUnique: vi.fn() },
     $queryRaw: vi.fn(),
@@ -34,6 +35,7 @@ describe("invitations", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("requires authentication to create an invitation", async () => {

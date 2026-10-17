@@ -2,11 +2,16 @@
 
 import type { NextFunction, Request, Response } from "express";
 import type { SessionTokenService } from "../../infrastructure/security/session.token.service.js";
+import type { UserRepository } from "../../repositories/user.repository.js";
 import { UnauthorizedError } from "../errors/index.js";
+import { validateUserSession } from "../auth/user.session.validator.js";
 
 // --> Se le inyecta el servicio de tokens
-export function createAuthMiddleware(sessionTokenService: SessionTokenService) {
-  return function requireAuthenticatedUser(req: Request, _res: Response, next: NextFunction) {
+export function createAuthMiddleware(
+  sessionTokenService: SessionTokenService,
+  userRepository: UserRepository,
+) {
+  return async function requireAuthenticatedUser(req: Request, _res: Response, next: NextFunction) {
     const authHeader = req.headers.authorization; // --> Bearer <token> (portado por cualquiera que lo tenga)
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -16,10 +21,10 @@ export function createAuthMiddleware(sessionTokenService: SessionTokenService) {
     const token = authHeader.slice("Bearer ".length); // --> Slicea bearer
 
     try {
-      req.userId = sessionTokenService.verify(token); // --> Deja ID disponible, tipo declarado
+      req.userId = await validateUserSession(token, sessionTokenService, userRepository);
       return next();
-    } catch {
-      return next(new UnauthorizedError("Token invalido o expirado"));
+    } catch (error) {
+      return next(error);
     }
   };
 }

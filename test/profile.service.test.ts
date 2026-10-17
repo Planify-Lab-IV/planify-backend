@@ -35,6 +35,8 @@ function createInMemoryUserRepository(initialUser: User | null = user): UserRepo
     create: vi.fn(async () => {
       throw new Error("Not used in profile tests");
     }),
+    updatePassword: vi.fn(async () => undefined),
+    findPasswordChangedAt: vi.fn(async () => (storedUser ? { passwordChangedAt: null } : null)),
     updateProfile: vi.fn(async (_id, data) => {
       if (!storedUser) {
         throw new Error("User not found");

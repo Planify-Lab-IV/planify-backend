@@ -53,6 +53,8 @@ function createInMemoryUserRepository(initialUser: User = user): UserRepository 
     create: vi.fn(async () => {
       throw new Error("Not used in profile endpoint tests");
     }),
+    updatePassword: vi.fn(async () => undefined),
+    findPasswordChangedAt: vi.fn(async () => ({ passwordChangedAt: null })),
     updateProfile: vi.fn(async (_id, data) => {
       storedUser = { ...storedUser, ...data };
       return storedUser;
@@ -86,7 +88,7 @@ function createApp(
   if (uploadsDirectory) {
     app.use("/uploads", express.static(uploadsDirectory));
   }
-  app.use(createProfileRouter(profileService, createAuthMiddleware(tokenService)));
+  app.use(createProfileRouter(profileService, createAuthMiddleware(tokenService, userRepository)));
   app.use(errorHandler);
 
   return { app, userRepository };

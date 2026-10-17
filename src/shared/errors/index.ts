@@ -30,6 +30,13 @@ export class ValidationError extends AppError {
   }
 }
 
+export class InvalidResetCodeError extends AppError {
+  constructor() {
+    super("El código de recuperación es inválido", 400, "INVALID_RESET_CODE");
+    this.name = "InvalidResetCodeError";
+  }
+}
+
 export class UnauthorizedError extends AppError {
   constructor(message = "No autorizado") {
     super(message, 401, "UNAUTHORIZED");

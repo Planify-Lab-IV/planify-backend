@@ -7,6 +7,7 @@ import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     simplifiedDebt: {
       findMany: vi.fn(),
       updateMany: vi.fn(),
@@ -63,6 +64,7 @@ describe("GET /me/balance", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("devuelve el resumen de deudas pendientes del usuario autenticado", async () => {
@@ -144,6 +146,7 @@ describe("GET /me/balance/people", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("devuelve una relación neta al compensar deudas de eventos distintos", async () => {
@@ -215,6 +218,7 @@ describe("GET /me/balance/people/:personKey", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("devuelve el desglose pendiente por evento y el neto compensado", async () => {
@@ -255,6 +259,7 @@ describe("POST /me/balance/people/:personKey/settle", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("salda las pendientes con una persona y devuelve el estado de cada evento", async () => {
