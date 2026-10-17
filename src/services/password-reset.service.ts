@@ -57,7 +57,11 @@ export function createPasswordResetService(
       if (!user) throw new InvalidResetCodeError();
 
       const now = clock();
-      const reservedCode = await passwordResetCodeRepository.reserveAttempt(user.id, now, MAX_ATTEMPTS);
+      const reservedCode = await passwordResetCodeRepository.reserveAttempt(
+        user.id,
+        now,
+        MAX_ATTEMPTS,
+      );
       if (!reservedCode) throw new InvalidResetCodeError();
 
       const isCodeValid = await passwordHasher.compare(code, reservedCode.codeHash);

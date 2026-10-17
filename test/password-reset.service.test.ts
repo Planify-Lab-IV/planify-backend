@@ -112,28 +112,33 @@ describe("PasswordResetService", () => {
     expect(codeRepository.reserveAttempt).toHaveBeenCalledWith(user.id, now, 5);
     expect(codeRepository.markUsed).toHaveBeenCalledWith("code-1", now);
     expect(passwordHasher.hash).toHaveBeenLastCalledWith("NuevaClave123!");
-    expect(userRepository.updatePassword).toHaveBeenCalledWith(
-      user.id,
-      "hash:NuevaClave123!",
-      now,
-    );
+    expect(userRepository.updatePassword).toHaveBeenCalledWith(user.id, "hash:NuevaClave123!", now);
   });
 
   it.each([
     ["no existe el usuario", null, undefined, true, "123456"],
     ["está vencido o agotado", user, null, true, "123456"],
     ["el código es incorrecto", user, { id: "code-1", codeHash: "hash:654321" }, true, "123456"],
-    ["ya fue usado concurrentemente", user, { id: "code-1", codeHash: "hash:123456" }, false, "123456"],
-  ])("devuelve el mismo error cuando %s", async (_caseName, foundUser, reserved, markUsed, code) => {
-    const { service, codeRepository, userRepository } = makeService(foundUser as User | null);
-    vi.mocked(codeRepository.reserveAttempt).mockResolvedValueOnce(
-      (reserved as { id: string; codeHash: string } | null | undefined) ?? null,
-    );
-    vi.mocked(codeRepository.markUsed).mockResolvedValueOnce(markUsed as boolean);
+    [
+      "ya fue usado concurrentemente",
+      user,
+      { id: "code-1", codeHash: "hash:123456" },
+      false,
+      "123456",
+    ],
+  ])(
+    "devuelve el mismo error cuando %s",
+    async (_caseName, foundUser, reserved, markUsed, code) => {
+      const { service, codeRepository, userRepository } = makeService(foundUser as User | null);
+      vi.mocked(codeRepository.reserveAttempt).mockResolvedValueOnce(
+        (reserved as { id: string; codeHash: string } | null | undefined) ?? null,
+      );
+      vi.mocked(codeRepository.markUsed).mockResolvedValueOnce(markUsed as boolean);
 
-    await expect(service.resetPassword(user.email, code, "NuevaClave123!")).rejects.toBeInstanceOf(
-      InvalidResetCodeError,
-    );
-    expect(userRepository.updatePassword).not.toHaveBeenCalled();
-  });
+      await expect(
+        service.resetPassword(user.email, code, "NuevaClave123!"),
+      ).rejects.toBeInstanceOf(InvalidResetCodeError);
+      expect(userRepository.updatePassword).not.toHaveBeenCalled();
+    },
+  );
 });
