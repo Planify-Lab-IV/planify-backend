@@ -18,9 +18,94 @@ docker compose -f infra/docker-compose.yml ps
 docker compose -f infra/docker-compose.yml down
 ```
 
-Agregaría esta sección debajo de `## Docker` en `infra/README.md`:
+---
 
-````md
+## Notificaciones push
+
+Las notificaciones push se envían directamente con Firebase Cloud Messaging
+(FCM). Se utiliza el proyecto de Firebase **Planify** (`planify-9f882`),
+administrado por la cuenta de Google del equipo `planify.mail@gmail.com`.
+
+El proyecto tiene registrada la aplicación Android con el paquete
+`com.planify.planify` y debe mantener habilitada la API **Firebase Cloud
+Messaging API (V1)**. La clave clásica de servidor no es compatible con la
+integración del backend.
+
+### Variable de producción
+
+El backend lee la cuenta de servicio desde `FIREBASE_SERVICE_ACCOUNT_BASE64`.
+La variable vive únicamente en el archivo `.env` de producción de la EC2, en
+la raíz del repositorio. El deploy no la reemplaza ni la elimina.
+
+Para crear el valor, descargar una clave privada de cuenta de servicio desde
+Firebase: **Configuración del proyecto** → **Cuentas de servicio** →
+**Generar nueva clave privada**. Guardar el JSON solamente en el lugar de
+secretos del equipo y codificarlo en una sola línea:
+
+```bash
+# Linux (incluida la EC2)
+base64 -w0 <archivo>.json
+
+# macOS
+base64 -i <archivo>.json | tr -d '\n'
+
+# windows
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("archivo.json"))
+```
+
+Copiar la salida como el valor de `FIREBASE_SERVICE_ACCOUNT_BASE64` en el
+`.env` de producción. Luego, eliminar el JSON descargado de la computadora y
+conservar solo la copia gestionada en el lugar de secretos del equipo.
+
+### Rotación de la clave
+
+Para reemplazar una clave de cuenta de servicio sin interrumpir el envío de
+notificaciones:
+
+1. Generar una nueva clave privada en Firebase y convertir su JSON a base64.
+2. Actualizar `FIREBASE_SERVICE_ACCOUNT_BASE64` en el `.env` de la EC2.
+3. Ejecutar un redeploy y comprobar que la API inició correctamente.
+4. Recién entonces, borrar la clave anterior en la consola de Firebase.
+
+No borrar la clave anterior antes de confirmar el redeploy: la instancia aún
+podría estar ejecutando una versión que la necesita.
+
+### Costo y plan
+
+Firebase Cloud Messaging no tiene costo. El proyecto usa el plan **Spark**,
+que no requiere tarjeta. No hace falta ni conviene habilitar el plan **Blaze**
+solo para FCM; ese plan se necesita para otros productos de Firebase, como
+Cloud Functions.
+
+### Verificación ante fallas
+
+No hay una prueba de punta a punta sin un teléfono que tenga un token de FCM,
+pero estas comprobaciones permiten diagnosticar la configuración:
+
+1. En Firebase, verificar que **Firebase Cloud Messaging API (V1)** siga
+   habilitada.
+2. En la EC2, comprobar que la variable se decodifica a un JSON válido y que
+   pertenece al proyecto esperado. El comando muestra solamente `project_id`
+   y `client_email`, nunca la clave privada:
+
+   ```bash
+   grep '^FIREBASE_SERVICE_ACCOUNT_BASE64=' .env | cut -d= -f2- | base64 -d | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["project_id"], d["client_email"])'
+   ```
+
+   El `project_id` debe ser `planify-9f882`.
+
+3. Cuando el backend con notificaciones esté desplegado, revisar que valida la
+   configuración al iniciar:
+
+   ```bash
+   docker logs planify-api
+   ```
+
+   Una variable malformada debe impedir que la API inicie. Si hay un error,
+   corregir la variable, hacer redeploy y repetir estas comprobaciones.
+
+---
+
 ## Deploy a producción
 
 El deploy se ejecuta automáticamente cuando se hace push a `main`. También puede ejecutarse manualmente desde la pestaña **Actions** de GitHub, usando el workflow **Production Deploy**.
@@ -60,7 +145,6 @@ Para volver a una versión anterior, crear una PR que revierta el commit problem
 ```bash
 git revert <commit>
 ```
-````
 
 Al mergear esa PR en `main`, GitHub Actions ejecutará un nuevo deploy.
 
