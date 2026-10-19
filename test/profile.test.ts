@@ -98,6 +98,9 @@ function authenticatedRequest(app: express.Express) {
     .set("Authorization", `Bearer ${tokenService.sign(user.id)}`);
 }
 
+type InvalidProfileRequest = (app: express.Express) => request.Test;
+type InvalidProfileCase = [description: string, sendRequest: InvalidProfileRequest];
+
 describe("PATCH /me/profile", () => {
   it("actualiza solo el nombre del usuario autenticado", async () => {
     const { app, userRepository } = createApp(createAvatarStorage());
@@ -176,7 +179,7 @@ describe("PATCH /me/profile", () => {
     expect(avatarStorage.remove).toHaveBeenNthCalledWith(2, "/uploads/avatars/first.png");
   });
 
-  it.each([
+  const invalidProfileCases: InvalidProfileCase[] = [
     [
       "a MIME type not allowed",
       (app: express.Express) =>
@@ -202,7 +205,7 @@ describe("PATCH /me/profile", () => {
               filename: "avatar.png",
               contentType,
             }),
-        ] as const,
+        ] as InvalidProfileCase,
     ),
     ["an empty name", (app: express.Express) => authenticatedRequest(app).send({ name: "   " })],
     [
@@ -213,7 +216,9 @@ describe("PATCH /me/profile", () => {
       "a request without name or avatar",
       (app: express.Express) => authenticatedRequest(app).send({}),
     ],
-  ])("returns INVALID_DATA for %s", async (_description, sendRequest) => {
+  ];
+
+  it.each(invalidProfileCases)("returns INVALID_DATA for %s", async (_description, sendRequest) => {
     const { app, userRepository } = createApp(createAvatarStorage());
 
     const response = await sendRequest(app);

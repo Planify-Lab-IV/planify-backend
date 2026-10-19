@@ -72,7 +72,7 @@ function createInMemoryUserRepository(): UserRepository {
         throw new Error("User not found");
       }
 
-      const updatedUser = { ...users[userIndex], ...data };
+      const updatedUser: UserWithPassword = { ...users[userIndex]!, ...data };
       users[userIndex] = updatedUser;
       return toPublicUser(updatedUser);
     },

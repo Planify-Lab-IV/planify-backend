@@ -34,18 +34,27 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
 import app, { httpMetricsAccumulator } from "../src/app.js";
 import { prisma } from "../src/infrastructure/prisma.js";
 
+const prismaMock = prisma as unknown as {
+  event: { count: ReturnType<typeof vi.fn> };
+  eventParticipant: { groupBy: ReturnType<typeof vi.fn> };
+  httpDailyMetric: {
+    findUnique: ReturnType<typeof vi.fn>;
+    upsert: ReturnType<typeof vi.fn>;
+  };
+};
+
 describe("GET /internal/kpis", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("devuelve los tres KPIs de negocio y los tres HTTP", async () => {
-    vi.mocked(prisma.event.count).mockResolvedValueOnce(8).mockResolvedValueOnce(3);
-    vi.mocked(prisma.eventParticipant.groupBy).mockResolvedValueOnce([
+    prismaMock.event.count.mockResolvedValueOnce(8).mockResolvedValueOnce(3);
+    prismaMock.eventParticipant.groupBy.mockResolvedValueOnce([
       { eventId: "event-1", _count: { eventId: 2 } },
       { eventId: "event-2", _count: { eventId: 4 } },
     ]);
-    vi.mocked(prisma.httpDailyMetric.findUnique).mockResolvedValueOnce({
+    prismaMock.httpDailyMetric.findUnique.mockResolvedValueOnce({
       requestCount: 15,
       serverErrorCount: 2,
       responseDurationMs: 1200n,
@@ -67,9 +76,9 @@ describe("GET /internal/kpis", () => {
   });
 
   it("devuelve cero para los KPIs HTTP si el día todavía no tiene métricas", async () => {
-    vi.mocked(prisma.event.count).mockResolvedValueOnce(0).mockResolvedValueOnce(0);
-    vi.mocked(prisma.eventParticipant.groupBy).mockResolvedValueOnce([]);
-    vi.mocked(prisma.httpDailyMetric.findUnique).mockResolvedValueOnce(null);
+    prismaMock.event.count.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+    prismaMock.eventParticipant.groupBy.mockResolvedValueOnce([]);
+    prismaMock.httpDailyMetric.findUnique.mockResolvedValueOnce(null);
 
     const response = await request(app)
       .get("/internal/kpis?date=2026-10-12")
@@ -89,27 +98,40 @@ describe("GET /internal/kpis", () => {
       serverErrorCount: 0,
       responseDurationMs: 0n,
     };
-    vi.mocked(prisma.httpDailyMetric.upsert).mockImplementation(async ({ create, update }) => {
-      if (storedHttpMetrics.requestCount === 0) {
-        storedHttpMetrics = {
-          requestCount: create.requestCount,
-          serverErrorCount: create.serverErrorCount,
-          responseDurationMs: create.responseDurationMs,
-        };
-      } else {
-        storedHttpMetrics = {
-          requestCount: storedHttpMetrics.requestCount + update.requestCount.increment,
-          serverErrorCount: storedHttpMetrics.serverErrorCount + update.serverErrorCount.increment,
-          responseDurationMs:
-            storedHttpMetrics.responseDurationMs + update.responseDurationMs.increment,
-        };
-      }
+    prismaMock.httpDailyMetric.upsert.mockImplementation(
+      async ({
+        create,
+        update,
+      }: {
+        create: typeof storedHttpMetrics;
+        update: Record<string, unknown>;
+      }) => {
+        if (storedHttpMetrics.requestCount === 0) {
+          storedHttpMetrics = {
+            requestCount: create.requestCount,
+            serverErrorCount: create.serverErrorCount,
+            responseDurationMs: create.responseDurationMs,
+          };
+        } else {
+          storedHttpMetrics = {
+            requestCount:
+              storedHttpMetrics.requestCount +
+              (update.requestCount as { increment: number }).increment,
+            serverErrorCount:
+              storedHttpMetrics.serverErrorCount +
+              (update.serverErrorCount as { increment: number }).increment,
+            responseDurationMs:
+              storedHttpMetrics.responseDurationMs +
+              (update.responseDurationMs as { increment: bigint }).increment,
+          };
+        }
 
-      return storedHttpMetrics;
-    });
-    vi.mocked(prisma.httpDailyMetric.findUnique).mockImplementation(async () => storedHttpMetrics);
-    vi.mocked(prisma.event.count).mockResolvedValue(0);
-    vi.mocked(prisma.eventParticipant.groupBy).mockResolvedValue([]);
+        return storedHttpMetrics;
+      },
+    );
+    prismaMock.httpDailyMetric.findUnique.mockImplementation(async () => storedHttpMetrics);
+    prismaMock.event.count.mockResolvedValue(0);
+    prismaMock.eventParticipant.groupBy.mockResolvedValue([]);
     httpMetricsAccumulator.record("2026-10-12", {
       requestCount: 1,
       serverErrorCount: 1,
@@ -126,7 +148,7 @@ describe("GET /internal/kpis", () => {
       http_5xx_responses: 1,
       http_response_time_total_ms: 75,
     });
-    expect(prisma.httpDailyMetric.upsert).toHaveBeenCalledOnce();
+    expect(prismaMock.httpDailyMetric.upsert).toHaveBeenCalledOnce();
   });
 
   it("responde 400 ante una fecha inválida o futura", async () => {
