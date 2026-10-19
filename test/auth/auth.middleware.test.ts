@@ -8,11 +8,27 @@ import type { Request, Response } from "express";
 import { createSessionTokenService } from "../../src/infrastructure/security/session.token.service.js";
 import { createAuthMiddleware } from "../../src/shared/middlewares/auth.middleware.js";
 import { errorHandler } from "../../src/shared/middlewares/error.middleware.js";
+import type { UserRepository } from "../../src/repositories/user.repository.js";
 
 const TEST_SECRET = "test-secret-que-cumple-con-los-32-caracteres";
 
 function makeApp() {
-  const auth = createAuthMiddleware(createSessionTokenService(TEST_SECRET));
+  const userRepository: UserRepository = {
+    findById: async () => null,
+    findByUsername: async () => null,
+    findByEmail: async () => null,
+    findPublicByIdentifier: async () => null,
+    findByIdentifier: async () => null,
+    create: async () => {
+      throw new Error("Not used");
+    },
+    updatePassword: async () => undefined,
+    findPasswordChangedAt: async () => ({ passwordChangedAt: null }),
+    updateProfile: async () => {
+      throw new Error("Not used");
+    },
+  };
+  const auth = createAuthMiddleware(createSessionTokenService(TEST_SECRET), userRepository);
   const app = express();
   app.use(express.json());
 

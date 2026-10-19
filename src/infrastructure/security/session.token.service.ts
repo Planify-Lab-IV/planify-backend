@@ -7,9 +7,14 @@ export interface ParticipantSession {
   eventId: string;
 }
 
+export interface UserSession {
+  userId: string;
+  issuedAt: number;
+}
+
 export interface SessionTokenService {
   sign(userId: string): string; // --> Crea token firmado con ese usuario
-  verify(token: string): string; // --> Valida token
+  verify(token: string): UserSession; // --> Valida token
 
   signParticipant(participantId: string, eventId: string): string;
   verifyParticipant(token: string): ParticipantSession;
@@ -24,7 +29,7 @@ export function createSessionTokenService(secret: string): SessionTokenService {
       return jwt.sign({ sub: userId, sessionType: "user" }, secret, { expiresIn: EXPIRES_IN });
     },
 
-    verify(token: string): string {
+    verify(token: string): UserSession {
       const payload = jwt.verify(token, secret);
 
       if (
@@ -32,12 +37,13 @@ export function createSessionTokenService(secret: string): SessionTokenService {
         payload === null ||
         payload.sessionType !== "user" ||
         typeof payload.sub !== "string" ||
-        payload.sub.trim() === ""
+        payload.sub.trim() === "" ||
+        typeof payload.iat !== "number"
       ) {
         throw new Error("Token de usuario inválido");
       }
 
-      return payload.sub;
+      return { userId: payload.sub, issuedAt: payload.iat };
     },
 
     signParticipant(participantId, eventId) {
