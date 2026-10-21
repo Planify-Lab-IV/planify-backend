@@ -26,7 +26,8 @@ function toPublicUser(user: UserWithPassword): User {
 }
 
 function createInMemoryUserRepository(): UserRepository {
-  const users: UserWithPassword[] = [];
+  type InMemoryUser = UserWithPassword & { passwordChangedAt: Date | null };
+  const users: InMemoryUser[] = [];
 
   return {
     async findById(id) {
@@ -62,6 +63,7 @@ function createInMemoryUserRepository(): UserRepository {
         email,
         avatarUrl: null,
         passwordHash,
+        passwordChangedAt: null,
       };
       users.push(user);
       return toPublicUser(user);
@@ -69,7 +71,9 @@ function createInMemoryUserRepository(): UserRepository {
     async updatePassword(id, passwordHash, changedAt) {
       const userIndex = users.findIndex((user) => user.id === id);
       if (userIndex === -1) throw new Error("User not found");
-      users[userIndex] = { ...users[userIndex], passwordHash, passwordChangedAt: changedAt };
+      const user = users[userIndex];
+      if (!user) throw new Error("User not found");
+      users[userIndex] = { ...user, passwordHash, passwordChangedAt: changedAt };
     },
     async findPasswordChangedAt(id) {
       const user = users.find((candidate) => candidate.id === id);
@@ -81,7 +85,9 @@ function createInMemoryUserRepository(): UserRepository {
         throw new Error("User not found");
       }
 
-      const updatedUser = { ...users[userIndex], ...data };
+      const user = users[userIndex];
+      if (!user) throw new Error("User not found");
+      const updatedUser = { ...user, ...data };
       users[userIndex] = updatedUser;
       return toPublicUser(updatedUser);
     },

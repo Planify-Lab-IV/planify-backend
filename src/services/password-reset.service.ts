@@ -33,21 +33,18 @@ export function createPasswordResetService(
       if (!user) return;
 
       const now = clock();
-      const requestCount = await passwordResetCodeRepository.countCreatedSince(
-        user.id,
-        new Date(now.getTime() - REQUEST_WINDOW_MS),
-      );
-      if (requestCount >= MAX_REQUESTS_PER_HOUR) return;
-
-      await passwordResetCodeRepository.invalidateActiveForUser(user.id, now);
-
       const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
       const codeHash = await passwordHasher.hash(code);
-      await passwordResetCodeRepository.create({
+      const wasCreated = await passwordResetCodeRepository.createReplacingActiveIfAllowed({
         userId: user.id,
         codeHash,
         expiresAt: new Date(now.getTime() + CODE_TTL_MS),
+        now,
+        requestWindowStart: new Date(now.getTime() - REQUEST_WINDOW_MS),
+        maxRequests: MAX_REQUESTS_PER_HOUR,
       });
+      if (!wasCreated) return;
+
       await notifier.sendResetCode({ email: normalizedEmail, code });
     },
 

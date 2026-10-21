@@ -44,7 +44,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Chneck format
+      - name: Check format
         run: npm run format:check
 
       - name: Lint

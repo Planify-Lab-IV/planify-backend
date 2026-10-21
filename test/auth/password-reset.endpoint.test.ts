@@ -5,16 +5,23 @@ import { prisma } from "../../src/infrastructure/prisma.js";
 import app from "../../src/app.js";
 
 vi.mock("../../src/infrastructure/prisma.js", () => ({
-  prisma: {
-    user: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
-    passwordResetCode: {
-      create: vi.fn(),
-      count: vi.fn(),
-      updateMany: vi.fn(),
-      updateManyAndReturn: vi.fn(),
-    },
-    $queryRaw: vi.fn(),
-  },
+  prisma: (() => {
+    const transactionClient = {
+      $queryRaw: vi.fn(),
+      user: { findFirst: vi.fn(), findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
+      passwordResetCode: {
+        create: vi.fn(),
+        count: vi.fn(),
+        findFirst: vi.fn(),
+        updateMany: vi.fn(),
+      },
+    };
+
+    return {
+      ...transactionClient,
+      $transaction: vi.fn(async (callback) => callback(transactionClient)),
+    };
+  })(),
 }));
 
 const existingUser = {
@@ -27,6 +34,7 @@ const existingUser = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(prisma.$queryRaw).mockResolvedValue([{ id: existingUser.id }] as never);
   vi.mocked(prisma.passwordResetCode.count).mockResolvedValue(0);
   vi.mocked(prisma.passwordResetCode.updateMany).mockResolvedValue({ count: 1 } as never);
 });
@@ -59,9 +67,10 @@ describe("password reset endpoints", () => {
 
   it("restablece la contraseña con un código correcto", async () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(existingUser as never);
-    vi.mocked(prisma.passwordResetCode.updateManyAndReturn).mockResolvedValueOnce([
-      { id: "reset-1", codeHash: await bcrypt.hash("123456", 10) },
-    ] as never);
+    vi.mocked(prisma.passwordResetCode.findFirst).mockResolvedValueOnce({
+      id: "reset-1",
+      codeHash: await bcrypt.hash("123456", 10),
+    } as never);
 
     const response = await request(app).post("/auth/reset-password").send({
       email: existingUser.email,
@@ -87,8 +96,8 @@ describe("password reset endpoints", () => {
   ])("responde INVALID_RESET_CODE para %s", async (_description, foundUser, reservedCodes) => {
     vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(foundUser as never);
     if (reservedCodes !== undefined) {
-      vi.mocked(prisma.passwordResetCode.updateManyAndReturn).mockResolvedValueOnce(
-        reservedCodes as never,
+      vi.mocked(prisma.passwordResetCode.findFirst).mockResolvedValueOnce(
+        ((reservedCodes as Array<{ id: string; codeHash: string }>).at(0) ?? null) as never,
       );
     }
 
@@ -111,6 +120,6 @@ describe("password reset endpoints", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toBe("INVALID_DATA");
-    expect(prisma.passwordResetCode.updateManyAndReturn).not.toHaveBeenCalled();
+    expect(prisma.passwordResetCode.findFirst).not.toHaveBeenCalled();
   });
 });
