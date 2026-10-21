@@ -11,6 +11,7 @@ import type {
 import type { AttendanceActor } from "../shared/auth/attendance.actor.js";
 import { NotFoundError } from "../shared/errors/index.js";
 import { validateEventId } from "../shared/event-id.js";
+import type { NotificationService } from "./notification.service.js";
 
 export interface UnreadEventCount {
   eventId: string;
@@ -39,6 +40,7 @@ export function createActivityLogService(
   activityLogRepository: ActivityLogRepository,
   eventRepository: EventRepository,
   participantRepository: ParticipantRepository,
+  notificationService?: NotificationService,
 ): ActivityLogService {
   async function ensureEventExists(eventId: string): Promise<void> {
     const event = await eventRepository.findById(eventId);
@@ -71,7 +73,13 @@ export function createActivityLogService(
   return {
     async record(params) {
       try {
-        await activityLogRepository.create(params);
+        const entry = await activityLogRepository.create(params);
+
+        if (notificationService) {
+          void notificationService.notifyActivity(entry).catch(() => {
+            console.error("No se pudo enviar la notificación de actividad");
+          });
+        }
       } catch (error) {
         console.error("No se pudo registrar la actividad del evento", error);
       }
