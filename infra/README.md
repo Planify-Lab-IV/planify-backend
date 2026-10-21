@@ -102,7 +102,7 @@ pero estas comprobaciones permiten diagnosticar la configuración:
 
    Una variable malformada debe impedir que la API inicie. Si hay un error,
    corregir la variable, hacer redeploy y repetir estas comprobaciones.
-   
+
 ---
 
 ## Almacenamiento de avatares en S3
