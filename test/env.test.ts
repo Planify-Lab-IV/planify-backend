@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getAvatarStorageMode, parseEnv } from "../src/shared/config/env.js";
+import {
+  getAvatarStorageMode,
+  getFirebaseServiceAccount,
+  parseEnv,
+} from "../src/shared/config/env.js";
 
 const baseEnv = {
   DATABASE_URL: "postgresql://user:password@localhost:5432/planify?schema=public",
@@ -42,4 +46,33 @@ describe("avatar storage environment", () => {
   ])("rejects incomplete S3 configuration", (input, missingVariable) => {
     expect(() => parseEnv(input)).toThrow(missingVariable);
   });
+});
+
+describe("Firebase environment", () => {
+  const serviceAccount = {
+    project_id: "planify",
+    client_email: "firebase@planify.iam.gserviceaccount.com",
+    private_key: "private-key",
+  };
+
+  it("permite no configurar Firebase y usa una cuenta válida cuando está presente", () => {
+    expect(getFirebaseServiceAccount(parseEnv(baseEnv))).toBeNull();
+
+    const env = parseEnv({
+      ...baseEnv,
+      FIREBASE_SERVICE_ACCOUNT_BASE64: Buffer.from(JSON.stringify(serviceAccount)).toString(
+        "base64",
+      ),
+    });
+    expect(getFirebaseServiceAccount(env)).toEqual(serviceAccount);
+  });
+
+  it.each(["not-base64", Buffer.from("{}").toString("base64")])(
+    "rechaza una credencial Firebase malformada",
+    (credential) => {
+      expect(() => parseEnv({ ...baseEnv, FIREBASE_SERVICE_ACCOUNT_BASE64: credential })).toThrow(
+        "FIREBASE_SERVICE_ACCOUNT_BASE64",
+      );
+    },
+  );
 });
