@@ -1,9 +1,14 @@
 import { prisma } from "../infrastructure/prisma.js";
 
 export interface PasswordResetCodeRepository {
-  create(data: { userId: string; codeHash: string; expiresAt: Date }): Promise<void>;
-  countCreatedSince(userId: string, since: Date): Promise<number>;
-  invalidateActiveForUser(userId: string, now: Date): Promise<void>;
+  createReplacingActiveIfAllowed(data: {
+    userId: string;
+    codeHash: string;
+    expiresAt: Date;
+    now: Date;
+    requestWindowStart: Date;
+    maxRequests: number;
+  }): Promise<boolean>;
   reserveAttempt(
     userId: string,
     now: Date,
@@ -14,34 +19,64 @@ export interface PasswordResetCodeRepository {
 
 export function createPasswordResetCodeRepository(): PasswordResetCodeRepository {
   return {
-    async create({ userId, codeHash, expiresAt }): Promise<void> {
-      await prisma.passwordResetCode.create({ data: { userId, codeHash, expiresAt } });
-    },
+    async createReplacingActiveIfAllowed({
+      userId,
+      codeHash,
+      expiresAt,
+      now,
+      requestWindowStart,
+      maxRequests,
+    }): Promise<boolean> {
+      return prisma.$transaction(async (tx) => {
+        const lockedUsers = await tx.$queryRaw<{ id: string }[]>`
+          SELECT "id"
+          FROM "usuario"
+          WHERE "id" = ${userId}
+          FOR UPDATE
+        `;
+        if (lockedUsers.length === 0) return false;
 
-    async countCreatedSince(userId, since): Promise<number> {
-      return prisma.passwordResetCode.count({ where: { userId, createdAt: { gte: since } } });
-    },
+        const requestCount = await tx.passwordResetCode.count({
+          where: { userId, createdAt: { gte: requestWindowStart } },
+        });
+        if (requestCount >= maxRequests) return false;
 
-    async invalidateActiveForUser(userId, now): Promise<void> {
-      await prisma.passwordResetCode.updateMany({
-        where: { userId, usedAt: null },
-        data: { usedAt: now },
+        await tx.passwordResetCode.updateMany({
+          where: { userId, usedAt: null },
+          data: { usedAt: now },
+        });
+        await tx.passwordResetCode.create({ data: { userId, codeHash, expiresAt } });
+
+        return true;
       });
     },
 
     async reserveAttempt(userId, now, maxAttempts) {
-      const [code] = await prisma.passwordResetCode.updateManyAndReturn({
-        where: {
-          userId,
-          usedAt: null,
-          expiresAt: { gt: now },
-          attempts: { lt: maxAttempts },
-        },
-        data: { attempts: { increment: 1 } },
-        select: { id: true, codeHash: true },
-      });
+      return prisma.$transaction(async (tx) => {
+        const code = await tx.passwordResetCode.findFirst({
+          where: {
+            userId,
+            usedAt: null,
+            expiresAt: { gt: now },
+            attempts: { lt: maxAttempts },
+          },
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          select: { id: true, codeHash: true },
+        });
+        if (!code) return null;
 
-      return code ?? null;
+        const result = await tx.passwordResetCode.updateMany({
+          where: {
+            id: code.id,
+            usedAt: null,
+            expiresAt: { gt: now },
+            attempts: { lt: maxAttempts },
+          },
+          data: { attempts: { increment: 1 } },
+        });
+
+        return result.count === 1 ? code : null;
+      });
     },
 
     async markUsed(id, now): Promise<boolean> {
