@@ -54,6 +54,12 @@ function createInMemoryUserRepository(): UserRepository {
         ) ?? null
       );
     },
+    async searchByUsername(query, { excludeUserId, limit }) {
+      return users
+        .filter((user) => user.id !== excludeUserId && user.username.toLowerCase().includes(query))
+        .slice(0, limit)
+        .map(({ id, name, username }) => ({ id, name, username }));
+    },
     async create({ name, username, email, passwordHash }) {
       const user = {
         id: `user-${users.length + 1}`,

@@ -20,6 +20,12 @@ export interface UserWithPassword extends User {
   passwordHash: string;
 }
 
+export interface PublicUser {
+  id: string;
+  name: string;
+  username: string;
+}
+
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
   findByUsername(username: string): Promise<User | null>;
@@ -35,6 +41,10 @@ export interface UserRepository {
   updatePassword(id: string, passwordHash: string, changedAt: Date): Promise<void>;
   findPasswordChangedAt(id: string): Promise<{ passwordChangedAt: Date | null } | null>;
   updateProfile(id: string, data: { name?: string; avatarUrl?: string }): Promise<User>;
+  searchByUsername(
+    query: string,
+    options: { excludeUserId: string; limit: number },
+  ): Promise<PublicUser[]>;
 }
 
 export function createUserRepository(client: UserRepositoryClient): UserRepository {
@@ -126,6 +136,18 @@ export function createUserRepository(client: UserRepositoryClient): UserReposito
         where: { id },
         data,
         select: { id: true, name: true, username: true, email: true, avatarUrl: true },
+      });
+    },
+
+    async searchByUsername(query, { excludeUserId, limit }) {
+      return client.user.findMany({
+        where: {
+          id: { not: excludeUserId },
+          username: { contains: query, mode: "insensitive" },
+        },
+        select: { id: true, name: true, username: true },
+        take: limit,
+        orderBy: { username: "asc" },
       });
     },
   };
