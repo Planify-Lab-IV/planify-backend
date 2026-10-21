@@ -85,6 +85,24 @@ export class RegistrationConflictError extends AppError {
   }
 }
 
+export class FriendshipAlreadyExistsError extends AppError {
+  constructor() {
+    super(
+      "Ya existe una relación de amistad entre estas personas",
+      409,
+      "FRIENDSHIP_ALREADY_EXISTS",
+    );
+    this.name = "FriendshipAlreadyExistsError";
+  }
+}
+
+export class FriendRequestNotFoundError extends NotFoundError {
+  constructor() {
+    super("Solicitud de amistad no encontrada", "FRIEND_REQUEST_NOT_FOUND");
+    this.name = "FriendRequestNotFoundError";
+  }
+}
+
 export class PendingDebtsError extends AppError {
   constructor() {
     super("No se puede cancelar un evento con deudas pendientes", 409, "PENDING_DEBTS");
