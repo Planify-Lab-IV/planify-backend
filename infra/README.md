@@ -23,8 +23,7 @@ docker compose -f infra/docker-compose.yml down
 ## Notificaciones push
 
 Las notificaciones push se envían directamente con Firebase Cloud Messaging
-(FCM). Se utiliza el proyecto de Firebase **Planify** (`planify-9f882`),
-administrado por la cuenta de Google del equipo `planify.mail@gmail.com`.
+(FCM). Se utiliza el proyecto de Firebase **Planify** (`planify-austral`)
 
 El proyecto tiene registrada la aplicación Android con el paquete
 `com.planify.planify` y debe mantener habilitada la API **Firebase Cloud
@@ -50,7 +49,7 @@ base64 -w0 <archivo>.json
 base64 -i <archivo>.json | tr -d '\n'
 
 # windows
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("archivo.json"))
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\Users\TuUsuario\Downloads\planify-xxxxx-firebase-adminsdk-xxxxx.json"))
 ```
 
 Copiar la salida como el valor de `FIREBASE_SERVICE_ACCOUNT_BASE64` en el
@@ -92,7 +91,7 @@ pero estas comprobaciones permiten diagnosticar la configuración:
    grep '^FIREBASE_SERVICE_ACCOUNT_BASE64=' .env | cut -d= -f2- | base64 -d | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["project_id"], d["client_email"])'
    ```
 
-   El `project_id` debe ser `planify-9f882`.
+   El `project_id` debe ser `planify-austral`.
 
 3. Cuando el backend con notificaciones esté desplegado, revisar que valida la
    configuración al iniciar:
