@@ -9,17 +9,17 @@ datasource db {
 }
 
 model User {
-  id                String  @id @default(uuid())
-  name              String  @map("nombre")
-  username          String  @unique
-  email             String  @unique
-  passwordHash      String  @map("password_hash")
+  id                String    @id @default(uuid())
+  name              String    @map("nombre")
+  username          String    @unique
+  email             String    @unique
+  passwordHash      String    @map("password_hash")
   passwordChangedAt DateTime? @map("password_cambiada_en")
-  avatarUrl         String? @map("avatar_url")
+  avatarUrl         String?   @map("avatar_url")
 
   groupMemberships    GroupMember[]
   eventParticipations EventParticipant[]
-  organizedEvents     Event[]            @relation("EventOrganizer")
+  organizedEvents     Event[]             @relation("EventOrganizer")
   passwordResetCodes  PasswordResetCode[]
 
   @@map("usuario")
@@ -268,10 +268,10 @@ model ActivityLog {
 }
 
 model HttpDailyMetric {
-  date DateTime @id @db.Date @map("fecha")
-  requestCount Int @default(0) @map("cantidad_requests")
-  serverErrorCount Int @default(0) @map("cantidad_respuestas_5xx")
-  responseDurationMs BigInt @default(0) @map("suma_tiempos_respuesta_ms")
+  date               DateTime @id @map("fecha") @db.Date
+  requestCount       Int      @default(0) @map("cantidad_requests")
+  serverErrorCount   Int      @default(0) @map("cantidad_respuestas_5xx")
+  responseDurationMs BigInt   @default(0) @map("suma_tiempos_respuesta_ms")
 
   @@map("metricas_http_diarias")
 }
