@@ -34,11 +34,12 @@ const router = Router();
 
 // -_> Inyección de dependencias
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
-const requireAuth = createAuthMiddleware(sessionTokenService);
+const requireAuth = createAuthMiddleware(sessionTokenService, userRepository);
 const requireAttendanceAuth = createAttendanceAuthMiddleware(
   sessionTokenService,
   participantRepository,
   eventRepository,
+  userRepository,
 );
 const activityLogService = createActivityLogService(
   activityLogRepository,

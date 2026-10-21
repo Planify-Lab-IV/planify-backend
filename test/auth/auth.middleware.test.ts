@@ -8,11 +8,27 @@ import type { Request, Response } from "express";
 import { createSessionTokenService } from "../../src/infrastructure/security/session.token.service.js";
 import { createAuthMiddleware } from "../../src/shared/middlewares/auth.middleware.js";
 import { errorHandler } from "../../src/shared/middlewares/error.middleware.js";
+import type { UserRepository } from "../../src/repositories/user.repository.js";
 
 const TEST_SECRET = "test-secret-que-cumple-con-los-32-caracteres";
 
-function makeApp() {
-  const auth = createAuthMiddleware(createSessionTokenService(TEST_SECRET));
+function makeApp(passwordChangedAt: Date | null = null, userExists = true) {
+  const userRepository: UserRepository = {
+    findById: async () => null,
+    findByUsername: async () => null,
+    findByEmail: async () => null,
+    findPublicByIdentifier: async () => null,
+    findByIdentifier: async () => null,
+    create: async () => {
+      throw new Error("Not used");
+    },
+    updatePassword: async () => undefined,
+    findPasswordChangedAt: async () => (userExists ? { passwordChangedAt } : null),
+    updateProfile: async () => {
+      throw new Error("Not used");
+    },
+  };
+  const auth = createAuthMiddleware(createSessionTokenService(TEST_SECRET), userRepository);
   const app = express();
   app.use(express.json());
 
@@ -65,5 +81,29 @@ describe("requireAuthenticatedUser", () => {
     const res = await request(makeApp()).get("/protegida").set("Authorization", `Bearer ${token}`);
 
     expect(res.status).toBe(401);
+  });
+
+  it("devuelve 401 si el token fue emitido antes del último cambio de contraseña", async () => {
+    const tokenService = createSessionTokenService(TEST_SECRET);
+    const token = tokenService.sign("user-42");
+    const issuedAt = tokenService.verify(token).issuedAt;
+
+    const res = await request(makeApp(new Date((issuedAt + 1) * 1000)))
+      .get("/protegida")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("UNAUTHORIZED");
+  });
+
+  it("devuelve 401 si el usuario de la sesión ya no existe", async () => {
+    const token = createSessionTokenService(TEST_SECRET).sign("user-42");
+
+    const res = await request(makeApp(null, false))
+      .get("/protegida")
+      .set("Authorization", `Bearer ${token}`);
+
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe("UNAUTHORIZED");
   });
 });

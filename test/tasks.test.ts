@@ -7,6 +7,7 @@ import { env } from "../src/shared/config/env.js";
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn() },
     eventParticipant: { findUnique: vi.fn(), findFirst: vi.fn() },
     task: {
@@ -63,6 +64,7 @@ describe("rutas de tareas", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
   });
 
   it("crea una tarea sin asignar para un usuario registrado", async () => {

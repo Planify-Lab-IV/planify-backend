@@ -33,6 +33,8 @@ function createInMemoryUserRepository(initialUsers: User[] = []): UserRepository
       users.push(user);
       return user;
     }),
+    updatePassword: vi.fn(async () => undefined),
+    findPasswordChangedAt: vi.fn(async () => null),
     updateProfile: vi.fn(async (id, data) => {
       const userIndex = users.findIndex((user) => user.id === id);
       if (userIndex === -1) {

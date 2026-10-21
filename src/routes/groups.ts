@@ -5,11 +5,12 @@ import { createGroupService } from "../services/group.service.js";
 import { createSessionTokenService } from "../infrastructure/security/session.token.service.js";
 import { env } from "../shared/config/env.js";
 import { createAuthMiddleware } from "../shared/middlewares/auth.middleware.js";
+import { userRepository } from "../repositories/user.repository.js";
 
 const router = Router();
 
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
-const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService);
+const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService, userRepository);
 
 const groupService = createGroupService(groupRepository);
 const groupController = createGroupController(groupService);

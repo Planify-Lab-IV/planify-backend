@@ -87,7 +87,9 @@ describe("GET /auth/me", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("returns the current public user for a valid user session", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(user as never);
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({ passwordChangedAt: null } as never)
+      .mockResolvedValueOnce(user as never);
 
     const response = await request(app)
       .get("/auth/me")
@@ -97,7 +99,11 @@ describe("GET /auth/me", () => {
     expect(response.body).toEqual({ user });
     expect(response.body).not.toHaveProperty("token");
     expect(response.body.user).not.toHaveProperty("passwordHash");
-    expect(prisma.user.findUnique).toHaveBeenCalledWith({
+    expect(prisma.user.findUnique).toHaveBeenNthCalledWith(1, {
+      where: { id: user.id },
+      select: { passwordChangedAt: true },
+    });
+    expect(prisma.user.findUnique).toHaveBeenNthCalledWith(2, {
       where: { id: user.id },
       select: { id: true, name: true, username: true, email: true, avatarUrl: true },
     });

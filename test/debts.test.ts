@@ -8,6 +8,7 @@ import type { SimplifiedDebtRecord } from "../src/repositories/debt.repository.j
 
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
+    user: { findUnique: vi.fn() },
     event: { findUnique: vi.fn() },
     eventParticipant: { findUnique: vi.fn() },
     simplifiedDebt: {
@@ -87,6 +88,7 @@ describe("GET /events/:eventId/debts", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
     vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
       callback({
         $queryRaw: vi.fn().mockResolvedValue([]),
@@ -269,6 +271,7 @@ describe("POST /events/:eventId/debts/:debtId/settle", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
     vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
       callback({
         $queryRaw: vi.fn().mockResolvedValue([]),

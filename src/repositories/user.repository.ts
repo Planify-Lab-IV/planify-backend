@@ -32,6 +32,8 @@ export interface UserRepository {
     email: string;
     passwordHash: string;
   }): Promise<User>;
+  updatePassword(id: string, passwordHash: string, changedAt: Date): Promise<void>;
+  findPasswordChangedAt(id: string): Promise<{ passwordChangedAt: Date | null } | null>;
   updateProfile(id: string, data: { name?: string; avatarUrl?: string }): Promise<User>;
 }
 
@@ -102,6 +104,20 @@ export function createUserRepository(client: UserRepositoryClient): UserReposito
       return await client.user.create({
         data,
         select: { id: true, name: true, username: true, email: true, avatarUrl: true },
+      });
+    },
+
+    async updatePassword(id: string, passwordHash: string, changedAt: Date): Promise<void> {
+      await client.user.update({
+        where: { id },
+        data: { passwordHash, passwordChangedAt: changedAt },
+      });
+    },
+
+    async findPasswordChangedAt(id: string): Promise<{ passwordChangedAt: Date | null } | null> {
+      return client.user.findUnique({
+        where: { id },
+        select: { passwordChangedAt: true },
       });
     },
 

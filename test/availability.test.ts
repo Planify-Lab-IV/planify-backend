@@ -59,6 +59,7 @@ describe("/events/:eventId/availability", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
     vi.mocked(prisma.$transaction).mockImplementation((async (callback: (tx: unknown) => unknown) =>
       callback({
         availabilitySlot: {
