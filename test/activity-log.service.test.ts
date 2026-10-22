@@ -13,6 +13,7 @@ import type {
   ParticipantRepository,
 } from "../src/repositories/participant.repository.js";
 import { createActivityLogService } from "../src/services/activity-log.service.js";
+import type { NotificationService } from "../src/services/notification.service.js";
 import { NotFoundError } from "../src/shared/errors/index.js";
 
 function makeEvent(overrides: Partial<Event> = {}): Event {
@@ -169,6 +170,66 @@ describe("ActivityLogService.record", () => {
 
     await expect(service.record(params)).resolves.toBeUndefined();
     expect(activityLogRepository.create).toHaveBeenCalledWith(params);
+  });
+
+  it("dispara la notificación después de persistir sin esperar su entrega", async () => {
+    const activityLogRepository = createActivityLogRepository();
+    const delivery = Promise.withResolvers<void>();
+    const notificationService: NotificationService = {
+      registerDevice: vi.fn(),
+      unregisterDevice: vi.fn(),
+      notifyActivity: vi.fn(() => delivery.promise),
+    };
+    const service = createActivityLogService(
+      activityLogRepository,
+      createEventRepository([makeEvent()]),
+      createParticipantRepository([makeParticipant()]),
+      notificationService,
+    );
+
+    await expect(
+      service.record({
+        eventId: "event-1",
+        type: "task_created",
+        actorParticipantId: "participant-1",
+        payload: { title: "Hielo" },
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(notificationService.notifyActivity).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: "event-1", type: "task_created" }),
+    );
+    delivery.resolve();
+    await delivery.promise;
+  });
+
+  it("no propaga un error de entrega de notificación", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const notificationService: NotificationService = {
+      registerDevice: vi.fn(),
+      unregisterDevice: vi.fn(),
+      notifyActivity: vi.fn(async () => {
+        throw new Error("FCM unavailable");
+      }),
+    };
+    const service = createActivityLogService(
+      createActivityLogRepository(),
+      createEventRepository([makeEvent()]),
+      createParticipantRepository([makeParticipant()]),
+      notificationService,
+    );
+
+    await expect(
+      service.record({
+        eventId: "event-1",
+        type: "task_created",
+        actorParticipantId: "participant-1",
+        payload: { title: "Hielo" },
+      }),
+    ).resolves.toBeUndefined();
+    await Promise.resolve();
+
+    expect(consoleError).toHaveBeenCalledWith("No se pudo enviar la notificación de actividad");
   });
 
   it("no propaga un error al persistir el feed", async () => {
