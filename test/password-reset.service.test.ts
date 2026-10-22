@@ -31,9 +31,7 @@ function makeUserRepository(foundUser: User | null = user): UserRepository {
 
 function makeCodeRepository(): PasswordResetCodeRepository {
   return {
-    create: vi.fn(),
-    countCreatedSince: vi.fn(async () => 0),
-    invalidateActiveForUser: vi.fn(),
+    createReplacingActiveIfAllowed: vi.fn(async () => true),
     reserveAttempt: vi.fn(async () => ({ id: "code-1", codeHash: "hash:123456" })),
     markUsed: vi.fn(async () => true),
   };
@@ -66,17 +64,19 @@ function makeService(foundUser: User | null = user) {
 }
 
 describe("PasswordResetService", () => {
-  it("normaliza el email, invalida el código previo y envía uno de seis dígitos hasheado", async () => {
+  it("normaliza el email, emite atómicamente un código de seis dígitos hasheado y lo notifica", async () => {
     const { service, userRepository, codeRepository, passwordHasher, notifier } = makeService();
 
     await service.requestReset("  ANA@PLANIFY.DEV ");
 
     expect(userRepository.findByEmail).toHaveBeenCalledWith(user.email);
-    expect(codeRepository.invalidateActiveForUser).toHaveBeenCalledWith(user.id, now);
-    expect(codeRepository.create).toHaveBeenCalledWith({
+    expect(codeRepository.createReplacingActiveIfAllowed).toHaveBeenCalledWith({
       userId: user.id,
       codeHash: expect.stringMatching(/^hash:\d{6}$/),
       expiresAt: new Date(now.getTime() + 30 * 60 * 1000),
+      now,
+      requestWindowStart: new Date(now.getTime() - 60 * 60 * 1000),
+      maxRequests: 3,
     });
     expect(notifier.sendResetCode).toHaveBeenCalledWith({
       email: user.email,
@@ -89,18 +89,16 @@ describe("PasswordResetService", () => {
     const { service, codeRepository, notifier } = makeService(null);
 
     await expect(service.requestReset("missing@planify.dev")).resolves.toBeUndefined();
-    expect(codeRepository.create).not.toHaveBeenCalled();
+    expect(codeRepository.createReplacingActiveIfAllowed).not.toHaveBeenCalled();
     expect(notifier.sendResetCode).not.toHaveBeenCalled();
   });
 
-  it("silencia la cuarta solicitud dentro de la hora", async () => {
+  it("silencia una solicitud que excede el límite dentro de la hora", async () => {
     const { service, codeRepository, notifier } = makeService();
-    vi.mocked(codeRepository.countCreatedSince).mockResolvedValueOnce(3);
+    vi.mocked(codeRepository.createReplacingActiveIfAllowed).mockResolvedValueOnce(false);
 
     await service.requestReset(user.email);
 
-    expect(codeRepository.invalidateActiveForUser).not.toHaveBeenCalled();
-    expect(codeRepository.create).not.toHaveBeenCalled();
     expect(notifier.sendResetCode).not.toHaveBeenCalled();
   });
 
