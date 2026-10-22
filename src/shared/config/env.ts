@@ -3,6 +3,12 @@
 
 import { z } from "zod";
 
+export interface FirebaseServiceAccount {
+  project_id: string;
+  client_email: string;
+  private_key: string;
+}
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
@@ -30,6 +36,7 @@ const envSchema = z
     MAIL_FROM: z.string().trim().min(1).optional(),
     // --> Valida que la key JWT sea de al menos 32 caracteres como string
     INTERNAL_KPIS_TOKEN: z.string().min(32).optional(),
+    FIREBASE_SERVICE_ACCOUNT_BASE64: z.string().trim().min(32).optional(),
   })
   .superRefine((value, ctx) => {
     if (value.AVATAR_STORAGE === "s3") {
@@ -59,6 +66,15 @@ const envSchema = z
             message: `${variable} es obligatoria cuando MAIL_TRANSPORT es smtp`,
           });
         }
+    if (value.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+      try {
+        decodeFirebaseServiceAccount(value.FIREBASE_SERVICE_ACCOUNT_BASE64);
+      } catch (error) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["FIREBASE_SERVICE_ACCOUNT_BASE64"],
+          message: error instanceof Error ? error.message : "La credencial de Firebase es inválida",
+        });
       }
     }
   });
@@ -79,6 +95,52 @@ export function getAvatarStorageMode(
   }
 
   return config.NODE_ENV === "production" ? "unavailable" : "local";
+}
+
+export function getFirebaseServiceAccount(
+  config: Pick<Env, "FIREBASE_SERVICE_ACCOUNT_BASE64">,
+): FirebaseServiceAccount | null {
+  if (!config.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+    return null;
+  }
+
+  return decodeFirebaseServiceAccount(config.FIREBASE_SERVICE_ACCOUNT_BASE64);
+}
+
+function decodeFirebaseServiceAccount(value: string): FirebaseServiceAccount {
+  let decoded: string;
+  let parsed: unknown;
+
+  try {
+    decoded = Buffer.from(value, "base64").toString("utf8");
+    parsed = JSON.parse(decoded);
+  } catch {
+    throw new Error("FIREBASE_SERVICE_ACCOUNT_BASE64 debe ser un JSON codificado en base64 válido");
+  }
+
+  if (
+    !isRecord(parsed) ||
+    typeof parsed.project_id !== "string" ||
+    parsed.project_id.trim() === "" ||
+    typeof parsed.client_email !== "string" ||
+    parsed.client_email.trim() === "" ||
+    typeof parsed.private_key !== "string" ||
+    parsed.private_key.trim() === ""
+  ) {
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT_BASE64 debe incluir project_id, client_email y private_key",
+    );
+  }
+
+  return {
+    project_id: parsed.project_id,
+    client_email: parsed.client_email,
+    private_key: parsed.private_key,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 export const env = parseEnv(process.env);

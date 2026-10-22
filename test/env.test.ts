@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getAvatarStorageMode, parseEnv } from "../src/shared/config/env.js";
+import {
+  getAvatarStorageMode,
+  getFirebaseServiceAccount,
+  parseEnv,
+} from "../src/shared/config/env.js";
 
 const baseEnv = {
   DATABASE_URL: "postgresql://user:password@localhost:5432/planify?schema=public",
@@ -85,5 +89,43 @@ describe("password reset mail environment", () => {
         MAIL_FROM: "Planify <planify@gmail.com>",
       }),
     ).toThrow("AVATAR_S3_BUCKET");
+describe("Firebase environment", () => {
+  const serviceAccount = {
+    project_id: "planify",
+    client_email: "firebase@planify.iam.gserviceaccount.com",
+    private_key: "private-key",
+  };
+
+  it("permite no configurar Firebase y usa una cuenta válida cuando está presente", () => {
+    expect(getFirebaseServiceAccount(parseEnv(baseEnv))).toBeNull();
+
+    const env = parseEnv({
+      ...baseEnv,
+      FIREBASE_SERVICE_ACCOUNT_BASE64: Buffer.from(JSON.stringify(serviceAccount)).toString(
+        "base64",
+      ),
+    });
+    expect(getFirebaseServiceAccount(env)).toEqual(serviceAccount);
+  });
+
+  it.each([
+    {
+      credential: Buffer.from("credencial que no es JSON y supera el mínimo").toString("base64"),
+      description: "no decodifica a JSON",
+      expectedMessage:
+        "FIREBASE_SERVICE_ACCOUNT_BASE64 debe ser un JSON codificado en base64 válido",
+    },
+    {
+      credential: Buffer.from(
+        JSON.stringify({ project_id: "planify", client_email: "firebase@planify.test" }),
+      ).toString("base64"),
+      description: "no incluye todos los campos requeridos",
+      expectedMessage:
+        "FIREBASE_SERVICE_ACCOUNT_BASE64 debe incluir project_id, client_email y private_key",
+    },
+  ])("rechaza una credencial Firebase que $description", ({ credential, expectedMessage }) => {
+    expect(() => parseEnv({ ...baseEnv, FIREBASE_SERVICE_ACCOUNT_BASE64: credential })).toThrow(
+      expectedMessage,
+    );
   });
 });

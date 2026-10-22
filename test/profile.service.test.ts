@@ -32,18 +32,20 @@ function createInMemoryUserRepository(initialUser: User | null = user): UserRepo
     findByEmail: vi.fn(async () => null),
     findPublicByIdentifier: vi.fn(async () => null),
     findByIdentifier: vi.fn(async () => null),
+    searchByUsername: vi.fn(async () => []),
     create: vi.fn(async () => {
       throw new Error("Not used in profile tests");
     }),
     updatePassword: vi.fn(async () => undefined),
     findPasswordChangedAt: vi.fn(async () => (storedUser ? { passwordChangedAt: null } : null)),
-    updateProfile: vi.fn(async (_id, data) => {
+    updateProfile: vi.fn(async (_id, data): Promise<User> => {
       if (!storedUser) {
         throw new Error("User not found");
       }
 
-      storedUser = { ...storedUser, ...data };
-      return storedUser;
+      const updatedUser: User = { ...storedUser, ...data };
+      storedUser = updatedUser;
+      return updatedUser;
     }),
   };
 }
@@ -145,17 +147,21 @@ describe("ProfileService.updateProfile", () => {
     expect(userRepository.updateProfile).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [{}, "sin cambios"],
-    [{ name: "   " }, "nombre vacío"],
-    [{ name: "a".repeat(81) }, "nombre demasiado largo"],
-    [{ name: 42 }, "nombre que no es texto"],
-    [{ avatar: null }, "avatar inválido"],
-  ])("rechaza un perfil %s", async (input) => {
+  const invalidProfileCases: Array<[string, unknown]> = [
+    ["sin cambios", {}],
+    ["nombre vacío", { name: "   " }],
+    ["nombre demasiado largo", { name: "a".repeat(81) }],
+    ["nombre que no es texto", { name: 42 }],
+    ["avatar inválido", { avatar: null }],
+  ];
+
+  it.each(invalidProfileCases)("rechaza un perfil %s", async (_description, input) => {
     const userRepository = createInMemoryUserRepository();
     const service = createProfileService(userRepository, createAvatarStorage());
 
-    await expect(service.updateProfile(user.id, input)).rejects.toBeInstanceOf(ValidationError);
+    await expect(service.updateProfile(user.id, input as never)).rejects.toBeInstanceOf(
+      ValidationError,
+    );
 
     expect(userRepository.updateProfile).not.toHaveBeenCalled();
   });

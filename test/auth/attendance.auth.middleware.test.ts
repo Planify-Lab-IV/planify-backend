@@ -71,6 +71,7 @@ function makeUserRepository(passwordChangedAt: Date | null = null): UserReposito
     findByEmail: vi.fn(),
     findPublicByIdentifier: vi.fn(),
     findByIdentifier: vi.fn(),
+    searchByUsername: vi.fn(async () => []),
     create: vi.fn(),
     updatePassword: vi.fn(),
     findPasswordChangedAt: vi.fn(async () => ({ passwordChangedAt })),
