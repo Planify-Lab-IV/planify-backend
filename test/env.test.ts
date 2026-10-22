@@ -67,12 +67,24 @@ describe("Firebase environment", () => {
     expect(getFirebaseServiceAccount(env)).toEqual(serviceAccount);
   });
 
-  it.each(["not-base64", Buffer.from("{}").toString("base64")])(
-    "rechaza una credencial Firebase malformada",
-    (credential) => {
-      expect(() => parseEnv({ ...baseEnv, FIREBASE_SERVICE_ACCOUNT_BASE64: credential })).toThrow(
-        "FIREBASE_SERVICE_ACCOUNT_BASE64",
-      );
+  it.each([
+    {
+      credential: Buffer.from("credencial que no es JSON y supera el mínimo").toString("base64"),
+      description: "no decodifica a JSON",
+      expectedMessage:
+        "FIREBASE_SERVICE_ACCOUNT_BASE64 debe ser un JSON codificado en base64 válido",
     },
-  );
+    {
+      credential: Buffer.from(
+        JSON.stringify({ project_id: "planify", client_email: "firebase@planify.test" }),
+      ).toString("base64"),
+      description: "no incluye todos los campos requeridos",
+      expectedMessage:
+        "FIREBASE_SERVICE_ACCOUNT_BASE64 debe incluir project_id, client_email y private_key",
+    },
+  ])("rechaza una credencial Firebase que $description", ({ credential, expectedMessage }) => {
+    expect(() => parseEnv({ ...baseEnv, FIREBASE_SERVICE_ACCOUNT_BASE64: credential })).toThrow(
+      expectedMessage,
+    );
+  });
 });
