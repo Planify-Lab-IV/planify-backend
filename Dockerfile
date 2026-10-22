@@ -1,7 +1,9 @@
 # Stage 1: Build & Dependencies
-FROM node:22-alpine AS builder
+FROM node:22.23.4-alpine AS builder
 
-RUN apk add --no-cache python3 make g++ libc6-compat
+# Prisma's Alpine engines require OpenSSL at runtime; install it explicitly so
+# generation and migrations use the same supported library in both stages.
+RUN apk add --no-cache python3 make g++ libc6-compat openssl
 
 WORKDIR /app
 
@@ -19,9 +21,9 @@ RUN npm run build
 RUN npm prune --omit=dev
 
 # Stage 2: Production Runner
-FROM node:22-alpine AS runner
+FROM node:22.23.4-alpine AS runner
 
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat openssl
 
 WORKDIR /app
 
