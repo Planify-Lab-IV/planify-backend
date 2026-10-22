@@ -5,6 +5,7 @@ const internalKpisToken = "token-interno-de-kpis-con-al-menos-32-caracteres";
 
 vi.mock("../src/shared/config/env.js", () => ({
   getAvatarStorageMode: () => "unavailable",
+  getFirebaseServiceAccount: () => null,
   env: {
     NODE_ENV: "test",
     PORT: 3000,
