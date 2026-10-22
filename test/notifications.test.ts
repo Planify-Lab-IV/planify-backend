@@ -49,10 +49,10 @@ describe("rutas de dispositivos push", () => {
   });
 
   it.each([
-    [{}, "sin token"],
-    [{ pushToken: "" }, "vacío"],
-    [{ pushToken: "ok", unexpected: true }, "con campos extra"],
-  ])("rechaza un body %s", async (body) => {
+    { body: {}, description: "sin token" },
+    { body: { pushToken: "" }, description: "vacío" },
+    { body: { pushToken: "ok", unexpected: true }, description: "con campos extra" },
+  ])("rechaza un body $description", async ({ body }) => {
     const response = await request(app)
       .post("/notifications/register-device")
       .set("Authorization", `Bearer ${tokenService.sign("user-1")}`)

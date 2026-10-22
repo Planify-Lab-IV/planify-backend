@@ -21,6 +21,7 @@ model User {
   eventParticipations    EventParticipant[]
   organizedEvents        Event[]             @relation("EventOrganizer")
   passwordResetCodes     PasswordResetCode[]
+  pushDevices            PushDevice[]
   sentFriendRequests     Friendship[]        @relation("FriendshipRequester")
   receivedFriendRequests Friendship[]        @relation("FriendshipAddressee")
 
@@ -38,6 +39,8 @@ model PushDevice {
 
   @@index([userId])
   @@map("dispositivo_push")
+}
+
 enum FriendshipStatus {
   pending
   accepted

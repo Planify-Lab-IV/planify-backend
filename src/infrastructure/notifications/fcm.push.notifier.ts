@@ -20,6 +20,15 @@ export interface FcmMessaging {
   }): Promise<{ responses: readonly FcmSendResponse[] }>;
 }
 
+function getErrorCode(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return undefined;
+  }
+
+  const { code } = error as { code?: unknown };
+  return typeof code === "string" ? code : undefined;
+}
+
 export function createFcmPushNotifier({ messaging }: { messaging: FcmMessaging }): PushNotifier {
   return {
     async send(tokens, message) {
@@ -38,12 +47,24 @@ export function createFcmPushNotifier({ messaging }: { messaging: FcmMessaging }
 
           result.responses.forEach((response, index) => {
             const token = batch[index];
-            if (token && !response.success && invalidTokenCodes.has(response.error?.code ?? "")) {
-              invalidTokens.push(token);
+            if (!response.success) {
+              const errorCode = response.error?.code;
+
+              if (token && invalidTokenCodes.has(errorCode ?? "")) {
+                invalidTokens.push(token);
+              } else {
+                console.error(
+                  "No se pudo enviar una notificación push",
+                  errorCode ?? "unknown-error",
+                );
+              }
             }
           });
-        } catch {
-          console.error("No se pudo enviar un lote de notificaciones push");
+        } catch (error) {
+          console.error(
+            "No se pudo enviar un lote de notificaciones push",
+            getErrorCode(error) ?? "unknown-error",
+          );
         }
       }
 
