@@ -151,9 +151,9 @@ describe("rutas de amigos", () => {
       requester: friendship.addressee,
       addressee: friendship.requester,
     };
-    vi.mocked(prisma.friendship.findMany)
-      .mockResolvedValueOnce([received] as never)
-      .mockResolvedValueOnce([friendship] as never);
+    vi.mocked(prisma.friendship.findMany).mockImplementation((args) => {
+      return (args?.where?.addresseeId === ana.id ? [received] : [friendship]) as never;
+    });
 
     const response = await request(app)
       .get("/friends/requests")

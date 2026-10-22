@@ -1,10 +1,14 @@
 // Capa de acceso a datos para la entidad Usuario.
 // Es el único lugar que interactúa con Prisma para usuarios.
 
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "../infrastructure/prisma.js";
 
 type UserRepositoryClient = PrismaClient | Prisma.TransactionClient;
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
 
 // --> Usuario canónico / público (sin datos sensibles)
 export interface User {
@@ -143,7 +147,7 @@ export function createUserRepository(client: UserRepositoryClient): UserReposito
       return client.user.findMany({
         where: {
           id: { not: excludeUserId },
-          username: { contains: query, mode: "insensitive" },
+          username: { contains: escapeLikePattern(query), mode: "insensitive" },
         },
         select: { id: true, name: true, username: true },
         take: limit,

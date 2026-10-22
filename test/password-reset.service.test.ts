@@ -22,6 +22,7 @@ function makeUserRepository(foundUser: User | null = user): UserRepository {
     findByEmail: vi.fn(async () => foundUser),
     findPublicByIdentifier: vi.fn(),
     findByIdentifier: vi.fn(),
+    searchByUsername: vi.fn(async () => []),
     create: vi.fn(),
     updatePassword: vi.fn(),
     findPasswordChangedAt: vi.fn(),
