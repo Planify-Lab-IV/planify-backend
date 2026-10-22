@@ -9,9 +9,11 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
     group: {
+      findUnique: vi.fn(),
       findMany: vi.fn(),
     },
     groupMember: {
+      deleteMany: vi.fn(),
       findMany: vi.fn(),
     },
   },
@@ -304,6 +306,99 @@ describe("GET /me/groups/overview", () => {
     const response = await request(app)
       .get("/me/groups/overview")
       .set("Authorization", "Bearer invalid-token");
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+  });
+});
+
+describe("DELETE /groups/:groupId/members/me", () => {
+  const authenticatedUserId = "user-1";
+  const validToken = createSessionTokenService(env.JWT_SECRET).sign(authenticatedUserId);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
+  });
+
+  it("removes the authenticated user's membership", async () => {
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: authenticatedUserId }],
+    } as never);
+    vi.mocked(prisma.groupMember.deleteMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    const response = await request(app)
+      .delete("/groups/group-1/members/me")
+      .set("Authorization", `Bearer ${validToken}`);
+
+    expect(response.status).toBe(204);
+    expect(response.text).toBe("");
+    expect(prisma.groupMember.deleteMany).toHaveBeenCalledWith({
+      where: { groupId: "group-1", userId: authenticatedUserId },
+    });
+  });
+
+  it("returns 404 when the group does not exist", async () => {
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .delete("/groups/missing-group/members/me")
+      .set("Authorization", `Bearer ${validToken}`);
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({ error: "NOT_FOUND", message: "Grupo no encontrado" });
+    expect(prisma.groupMember.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the authenticated user is not a member", async () => {
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: "user-2" }],
+    } as never);
+
+    const response = await request(app)
+      .delete("/groups/group-1/members/me")
+      .set("Authorization", `Bearer ${validToken}`);
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({
+      error: "FORBIDDEN",
+      message: "No pertenecés a este grupo",
+    });
+    expect(prisma.groupMember.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the user leaves the same group twice", async () => {
+    vi.mocked(prisma.group.findUnique)
+      .mockResolvedValueOnce({
+        id: "group-1",
+        name: "Amigos",
+        members: [{ userId: authenticatedUserId }],
+      } as never)
+      .mockResolvedValueOnce({
+        id: "group-1",
+        name: "Amigos",
+        members: [],
+      } as never);
+    vi.mocked(prisma.groupMember.deleteMany).mockResolvedValueOnce({ count: 1 } as never);
+
+    const firstResponse = await request(app)
+      .delete("/groups/group-1/members/me")
+      .set("Authorization", `Bearer ${validToken}`);
+    const secondResponse = await request(app)
+      .delete("/groups/group-1/members/me")
+      .set("Authorization", `Bearer ${validToken}`);
+
+    expect(firstResponse.status).toBe(204);
+    expect(secondResponse.status).toBe(403);
+    expect(prisma.groupMember.deleteMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns 401 when the token is missing", async () => {
+    const response = await request(app).delete("/groups/group-1/members/me");
 
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("UNAUTHORIZED");
