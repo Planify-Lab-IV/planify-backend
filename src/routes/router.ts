@@ -10,6 +10,7 @@ import balancesRouter from "./balances.js";
 import activityLogRouter from "./activity-log.js";
 import { createInternalKpisRouter } from "./internal-kpis.js";
 import profileRouter from "./profile.js";
+import notificationsRouter from "./notifications.js";
 import friendsRouter from "./friends.js";
 import { RouteNotFoundError } from "../shared/errors/index.js";
 import type { HttpMetricsAccumulator } from "../services/http-metrics-accumulator.js";
@@ -25,6 +26,7 @@ export function createRouter(httpMetricsAccumulator: HttpMetricsAccumulator): Ro
   router.use(balancesRouter);
   router.use(activityLogRouter);
   router.use(profileRouter);
+  router.use(notificationsRouter);
   router.use(friendsRouter);
   router.use(createInternalKpisRouter(httpMetricsAccumulator));
 

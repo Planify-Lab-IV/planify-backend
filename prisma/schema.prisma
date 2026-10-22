@@ -21,10 +21,24 @@ model User {
   eventParticipations    EventParticipant[]
   organizedEvents        Event[]             @relation("EventOrganizer")
   passwordResetCodes     PasswordResetCode[]
+  pushDevices            PushDevice[]
   sentFriendRequests     Friendship[]        @relation("FriendshipRequester")
   receivedFriendRequests Friendship[]        @relation("FriendshipAddressee")
 
   @@map("usuario")
+}
+
+model PushDevice {
+  id        String   @id @default(uuid())
+  userId    String   @map("usuario_id")
+  token     String   @unique @map("push_token")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("dispositivo_push")
 }
 
 enum FriendshipStatus {

@@ -58,6 +58,12 @@ El envío del código de recuperación está simulado. Con `NODE_ENV=development
 
 Cada código vence a los 30 minutos, admite cinco intentos y una cuenta puede solicitar hasta tres códigos por hora.
 
+## Notificaciones push
+
+El backend envía notificaciones a los demás participantes registrados de un evento cuando se crea una tarea, se registra un gasto o se confirma el horario. Las actualizaciones de disponibilidad no generan push. Los participantes anónimos no reciben push porque no registran dispositivos, pero las actividades que generan sí notifican a los demás participantes registrados.
+
+La variable opcional `FIREBASE_SERVICE_ACCOUNT_BASE64` contiene la cuenta de servicio de Firebase como JSON codificado en base64. Si no está configurada, el backend continúa funcionando y solo registra en el log que habría enviado una notificación; no se requieren credenciales de Firebase para desarrollo local.
+
 ### Git Flow (convenciones a seguir a la hora de nombrar una branch)
 
 - `feature/PLANIFY-<n>-descripcion` → `develop`
