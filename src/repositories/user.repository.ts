@@ -1,10 +1,14 @@
 // Capa de acceso a datos para la entidad Usuario.
 // Es el único lugar que interactúa con Prisma para usuarios.
 
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { type Prisma, type PrismaClient } from "@prisma/client";
 import { prisma } from "../infrastructure/prisma.js";
 
 type UserRepositoryClient = PrismaClient | Prisma.TransactionClient;
+
+function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
 
 // --> Usuario canónico / público (sin datos sensibles)
 export interface User {
@@ -18,6 +22,12 @@ export interface User {
 // --> Usuario interno para autenticación (incluye el hash)
 export interface UserWithPassword extends User {
   passwordHash: string;
+}
+
+export interface PublicUser {
+  id: string;
+  name: string;
+  username: string;
 }
 
 export interface UserRepository {
@@ -35,6 +45,10 @@ export interface UserRepository {
   updatePassword(id: string, passwordHash: string, changedAt: Date): Promise<void>;
   findPasswordChangedAt(id: string): Promise<{ passwordChangedAt: Date | null } | null>;
   updateProfile(id: string, data: { name?: string; avatarUrl?: string }): Promise<User>;
+  searchByUsername(
+    query: string,
+    options: { excludeUserId: string; limit: number },
+  ): Promise<PublicUser[]>;
 }
 
 export function createUserRepository(client: UserRepositoryClient): UserRepository {
@@ -126,6 +140,18 @@ export function createUserRepository(client: UserRepositoryClient): UserReposito
         where: { id },
         data,
         select: { id: true, name: true, username: true, email: true, avatarUrl: true },
+      });
+    },
+
+    async searchByUsername(query, { excludeUserId, limit }) {
+      return client.user.findMany({
+        where: {
+          id: { not: excludeUserId },
+          username: { contains: escapeLikePattern(query), mode: "insensitive" },
+        },
+        select: { id: true, name: true, username: true },
+        take: limit,
+        orderBy: { username: "asc" },
       });
     },
   };

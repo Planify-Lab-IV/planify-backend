@@ -17,12 +17,35 @@ model User {
   passwordChangedAt DateTime? @map("password_cambiada_en")
   avatarUrl         String?   @map("avatar_url")
 
-  groupMemberships    GroupMember[]
-  eventParticipations EventParticipant[]
-  organizedEvents     Event[]             @relation("EventOrganizer")
-  passwordResetCodes  PasswordResetCode[]
+  groupMemberships       GroupMember[]
+  eventParticipations    EventParticipant[]
+  organizedEvents        Event[]             @relation("EventOrganizer")
+  passwordResetCodes     PasswordResetCode[]
+  sentFriendRequests     Friendship[]        @relation("FriendshipRequester")
+  receivedFriendRequests Friendship[]        @relation("FriendshipAddressee")
 
   @@map("usuario")
+}
+
+enum FriendshipStatus {
+  pending
+  accepted
+}
+
+model Friendship {
+  id          String           @id @default(uuid())
+  requesterId String           @map("solicitante_id")
+  addresseeId String           @map("receptor_id")
+  pairKey     String           @unique @map("clave_par")
+  status      FriendshipStatus @default(pending) @map("estado")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  requester User @relation("FriendshipRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("FriendshipAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([addresseeId])
+  @@map("amistad")
 }
 
 model PasswordResetCode {

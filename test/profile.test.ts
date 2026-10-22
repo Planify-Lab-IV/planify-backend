@@ -50,6 +50,7 @@ function createInMemoryUserRepository(initialUser: User = user): UserRepository 
     findByEmail: vi.fn(async () => null),
     findPublicByIdentifier: vi.fn(async () => null),
     findByIdentifier: vi.fn(async () => null),
+    searchByUsername: vi.fn(async () => []),
     create: vi.fn(async () => {
       throw new Error("Not used in profile endpoint tests");
     }),
