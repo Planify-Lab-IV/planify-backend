@@ -22,7 +22,7 @@ export function createSmtpPasswordResetNotifier({
       ].join("\n");
       const html = [
         "<p>Tu código para restablecer la contraseña de Planify es:</p>",
-        `<p><strong style=\"font-size: 24px; letter-spacing: 4px;\">${code}</strong></p>`,
+        `<p><strong style="font-size: 24px; letter-spacing: 4px;">${code}</strong></p>`,
         "<p>Este código vence en 30 minutos.</p>",
         "<p>Si no pediste este código, ignorá este mail. Tu contraseña no cambió.</p>",
       ].join("");

@@ -4,6 +4,10 @@ import bcrypt from "bcrypt";
 import { prisma } from "../../src/infrastructure/prisma.js";
 import app from "../../src/app.js";
 
+const { sendResetCode } = vi.hoisted(() => ({
+  sendResetCode: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../../src/infrastructure/prisma.js", () => ({
   prisma: (() => {
     const transactionClient = {
@@ -22,6 +26,10 @@ vi.mock("../../src/infrastructure/prisma.js", () => ({
       $transaction: vi.fn(async (callback) => callback(transactionClient)),
     };
   })(),
+}));
+
+vi.mock("../../src/infrastructure/notifications/password-reset-notifier.factory.js", () => ({
+  createPasswordResetNotifier: () => ({ sendResetCode }),
 }));
 
 const existingUser = {
@@ -46,8 +54,6 @@ describe("password reset endpoints", () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(existingUser as never);
     vi.mocked(prisma.passwordResetCode.count).mockResolvedValueOnce(0).mockResolvedValueOnce(3);
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
-
     const existing = await request(app)
       .post("/auth/forgot-password")
       .send({ email: existingUser.email });
@@ -61,8 +67,9 @@ describe("password reset endpoints", () => {
     expect(existing).toEqual(expect.objectContaining({ status: 200, body: missing.body }));
     expect(limited).toEqual(expect.objectContaining({ status: 200, body: missing.body }));
     expect(prisma.passwordResetCode.create).toHaveBeenCalledTimes(1);
-    expect(log).toHaveBeenCalled();
-    log.mockRestore();
+    expect(sendResetCode).toHaveBeenCalledWith(
+      expect.objectContaining({ email: existingUser.email, code: expect.any(String) }),
+    );
   });
 
   it("restablece la contraseña con un código correcto", async () => {
