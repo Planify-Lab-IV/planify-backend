@@ -11,7 +11,7 @@ import { env } from "../shared/config/env.js";
 import { createAuthMiddleware } from "../shared/middlewares/auth.middleware.js";
 import { createPasswordResetController } from "../controllers/password-reset.controller.js";
 import { passwordResetCodeRepository } from "../repositories/password-reset-code.repository.js";
-import { createConsolePasswordResetNotifier } from "../infrastructure/notifications/password-reset.notifier.js";
+import { createPasswordResetNotifier } from "../infrastructure/notifications/password-reset-notifier.factory.js";
 import { createPasswordResetService } from "../services/password-reset.service.js";
 
 const router = Router();
@@ -31,7 +31,7 @@ const passwordResetService = createPasswordResetService(
   userRepository,
   passwordResetCodeRepository,
   passwordHasher,
-  createConsolePasswordResetNotifier(env.NODE_ENV),
+  createPasswordResetNotifier(env),
   () => new Date(),
 );
 const passwordResetController = createPasswordResetController(passwordResetService);
