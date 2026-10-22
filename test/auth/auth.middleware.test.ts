@@ -19,6 +19,7 @@ function makeApp(passwordChangedAt: Date | null = null, userExists = true) {
     findByEmail: async () => null,
     findPublicByIdentifier: async () => null,
     findByIdentifier: async () => null,
+    searchByUsername: async () => [],
     create: async () => {
       throw new Error("Not used");
     },

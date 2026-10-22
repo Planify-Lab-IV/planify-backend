@@ -96,6 +96,7 @@ const unusedUserRepository: UserRepository = {
   findByEmail: vi.fn(),
   findPublicByIdentifier: vi.fn(),
   findByIdentifier: vi.fn(),
+  searchByUsername: vi.fn(),
   create: vi.fn(),
   updatePassword: vi.fn(),
   findPasswordChangedAt: vi.fn(),

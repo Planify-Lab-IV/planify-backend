@@ -28,6 +28,7 @@ function createInMemoryUserRepository(initialUsers: User[] = []): UserRepository
         users.find((user) => user.username === identifier || user.email === identifier) ?? null,
     ),
     findByIdentifier: vi.fn(async () => null),
+    searchByUsername: vi.fn(async () => []),
     create: vi.fn(async ({ name, username, email }) => {
       const user = { id: `user-${users.length + 1}`, name, username, email, avatarUrl: null };
       users.push(user);
