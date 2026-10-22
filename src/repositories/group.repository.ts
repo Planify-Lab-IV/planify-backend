@@ -48,6 +48,7 @@ export interface GroupOverview extends GroupSummary {
 export interface GroupRepository {
   findById(id: string): Promise<GroupWithMembers | null>;
   isMember(groupId: string, userId: string): Promise<boolean>;
+  removeMember(groupId: string, userId: string): Promise<void>;
   create(data: { name: string }): Promise<Group>;
   findByUserId(userId: string): Promise<GroupSummary[]>;
   findOverviewByUserId(userId: string): Promise<GroupOverview[]>;
@@ -92,6 +93,15 @@ export const groupRepository: GroupRepository = {
     });
 
     return membership !== null;
+  },
+
+  async removeMember(groupId: string, userId: string): Promise<void> {
+    await prisma.groupMember.deleteMany({
+      where: {
+        groupId,
+        userId,
+      },
+    });
   },
 
   // Crea grupo sin miembros inicialmente
