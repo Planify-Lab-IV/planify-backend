@@ -54,9 +54,22 @@ npx prisma studio
 
 ## Recuperación de contraseña
 
-El envío del código de recuperación está simulado. Con `NODE_ENV=development`, el código de seis dígitos se imprime en la consola del backend para probar el flujo localmente. En producción el código nunca se registra, por lo que el flujo todavía no es usable por una persona final hasta que PLANIFY-153 configure el proveedor de correo.
+En producción, con `MAIL_TRANSPORT=smtp`, el código de recuperación se entrega mediante SMTP. En desarrollo y cuando `MAIL_TRANSPORT` no está configurada, el código de seis dígitos sigue imprimiéndose en la consola para facilitar el desarrollo local.
 
 Cada código vence a los 30 minutos, admite cinco intentos y una cuenta puede solicitar hasta tres códigos por hora.
+
+Para probar SMTP sin usar la cuenta de producción, crear una cuenta de prueba en [Ethereal](https://nodemailer.com/guides/testing-with-ethereal) y copiar sus credenciales SMTP en un `.env` local no versionado:
+
+```env
+MAIL_TRANSPORT=smtp
+SMTP_HOST=smtp.ethereal.email
+SMTP_PORT=587
+SMTP_USER=<usuario de Ethereal>
+SMTP_PASS=<contraseña de Ethereal>
+MAIL_FROM=Planify <planify@example.com>
+```
+
+Una cuenta personal de Gmail admite hasta 500 destinatarios por día. Junto al límite de tres pedidos por hora por cuenta, alcanza para el MVP.
 
 ### Git Flow (convenciones a seguir a la hora de nombrar una branch)
 

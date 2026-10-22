@@ -43,3 +43,47 @@ describe("avatar storage environment", () => {
     expect(() => parseEnv(input)).toThrow(missingVariable);
   });
 });
+
+describe("password reset mail environment", () => {
+  it("uses console delivery by default and SMTP defaults when it is enabled", () => {
+    expect(parseEnv(baseEnv).MAIL_TRANSPORT).toBeUndefined();
+    expect(
+      parseEnv({
+        ...baseEnv,
+        MAIL_TRANSPORT: "smtp",
+        SMTP_USER: "planify@gmail.com",
+        SMTP_PASS: "app-password",
+        MAIL_FROM: "Planify <planify@gmail.com>",
+      }),
+    ).toMatchObject({ MAIL_TRANSPORT: "smtp", SMTP_HOST: "smtp.gmail.com", SMTP_PORT: 465 });
+  });
+
+  it.each(["SMTP_USER", "SMTP_PASS", "MAIL_FROM"] as const)(
+    "rejects SMTP without %s",
+    (missingVariable) => {
+      const input = {
+        ...baseEnv,
+        MAIL_TRANSPORT: "smtp",
+        SMTP_USER: "planify@gmail.com",
+        SMTP_PASS: "app-password",
+        MAIL_FROM: "Planify <planify@gmail.com>",
+      };
+      delete input[missingVariable];
+
+      expect(() => parseEnv(input)).toThrow(missingVariable);
+    },
+  );
+
+  it("keeps S3 validation when SMTP is also configured", () => {
+    expect(() =>
+      parseEnv({
+        ...baseEnv,
+        AVATAR_STORAGE: "s3",
+        MAIL_TRANSPORT: "smtp",
+        SMTP_USER: "planify@gmail.com",
+        SMTP_PASS: "app-password",
+        MAIL_FROM: "Planify <planify@gmail.com>",
+      }),
+    ).toThrow("AVATAR_S3_BUCKET");
+  });
+});
