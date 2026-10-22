@@ -32,9 +32,12 @@ function createInMemoryUserRepository(initialUser: User | null = user): UserRepo
     findByEmail: vi.fn(async () => null),
     findPublicByIdentifier: vi.fn(async () => null),
     findByIdentifier: vi.fn(async () => null),
+    searchByUsername: vi.fn(async () => []),
     create: vi.fn(async () => {
       throw new Error("Not used in profile tests");
     }),
+    updatePassword: vi.fn(async () => undefined),
+    findPasswordChangedAt: vi.fn(async () => (storedUser ? { passwordChangedAt: null } : null)),
     updateProfile: vi.fn(async (_id, data): Promise<User> => {
       if (!storedUser) {
         throw new Error("User not found");

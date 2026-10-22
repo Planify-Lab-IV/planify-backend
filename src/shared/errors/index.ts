@@ -30,6 +30,13 @@ export class ValidationError extends AppError {
   }
 }
 
+export class InvalidResetCodeError extends AppError {
+  constructor() {
+    super("El código de recuperación es inválido", 400, "INVALID_RESET_CODE");
+    this.name = "InvalidResetCodeError";
+  }
+}
+
 export class UnauthorizedError extends AppError {
   constructor(message = "No autorizado") {
     super(message, 401, "UNAUTHORIZED");
@@ -75,6 +82,24 @@ export class RegistrationConflictError extends AppError {
   constructor() {
     super("No se pudo crear la cuenta con esos datos", 409, "REGISTRATION_CONFLICT");
     this.name = "RegistrationConflictError";
+  }
+}
+
+export class FriendshipAlreadyExistsError extends AppError {
+  constructor() {
+    super(
+      "Ya existe una relación de amistad entre estas personas",
+      409,
+      "FRIENDSHIP_ALREADY_EXISTS",
+    );
+    this.name = "FriendshipAlreadyExistsError";
+  }
+}
+
+export class FriendRequestNotFoundError extends NotFoundError {
+  constructor() {
+    super("Solicitud de amistad no encontrada", "FRIEND_REQUEST_NOT_FOUND");
+    this.name = "FriendRequestNotFoundError";
   }
 }
 
