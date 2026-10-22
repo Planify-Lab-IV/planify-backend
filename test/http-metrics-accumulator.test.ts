@@ -120,6 +120,7 @@ describe("HttpMetricsAccumulator", () => {
 function createRepository(): HttpMetricsRepository {
   return {
     addDailyMetrics: vi.fn(),
+    findDailyMetrics: vi.fn(),
   };
 }
 

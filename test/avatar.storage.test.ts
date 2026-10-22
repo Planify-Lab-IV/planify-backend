@@ -4,7 +4,10 @@ import { join } from "node:path";
 import { DeleteObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLocalAvatarStorage } from "../src/infrastructure/storage/local-avatar.storage.js";
-import { createS3AvatarStorage } from "../src/infrastructure/storage/s3-avatar.storage.js";
+import {
+  createS3AvatarStorage,
+  type AvatarS3Client,
+} from "../src/infrastructure/storage/s3-avatar.storage.js";
 
 const bucket = "planify-avatars";
 const region = "us-east-1";
@@ -52,16 +55,18 @@ describe("createLocalAvatarStorage", () => {
 
 describe("createS3AvatarStorage", () => {
   it("envía el objeto con caché inmutable y devuelve su URL pública", async () => {
-    const client = { send: vi.fn(async () => ({})) };
+    const send = vi.fn<AvatarS3Client["send"]>();
+    const client: AvatarS3Client = { send };
     const storage = createS3AvatarStorage({ client, bucket, region });
     const buffer = Buffer.from("avatar-content");
 
     const url = await storage.save({ buffer, mimeType: "image/webp" });
 
     expect(url).toMatch(new RegExp(`^${origin}/avatars/[0-9a-f-]{36}\\.webp$`));
-    const command = vi.mocked(client.send).mock.calls[0]?.[0];
+    const command = send.mock.calls[0]?.[0];
     expect(command).toBeInstanceOf(PutObjectCommand);
-    expect((command as PutObjectCommand).input).toMatchObject({
+    if (!(command instanceof PutObjectCommand)) throw new Error("Se esperaba un PutObjectCommand");
+    expect(command.input).toMatchObject({
       Bucket: bucket,
       Key: url.slice(`${origin}/`.length),
       Body: buffer,
@@ -71,7 +76,8 @@ describe("createS3AvatarStorage", () => {
   });
 
   it("borra la clave de una URL S3 propia e ignora una URL ajena", async () => {
-    const client = { send: vi.fn(async () => ({})) };
+    const send = vi.fn<AvatarS3Client["send"]>();
+    const client: AvatarS3Client = { send };
     const storage = createS3AvatarStorage({ client, bucket, region });
     const url = await storage.save({
       buffer: Buffer.from("avatar-content"),
@@ -80,15 +86,18 @@ describe("createS3AvatarStorage", () => {
 
     await storage.remove(url);
 
-    const command = vi.mocked(client.send).mock.calls[1]?.[0];
+    const command = send.mock.calls[1]?.[0];
     expect(command).toBeInstanceOf(DeleteObjectCommand);
-    expect((command as DeleteObjectCommand).input).toEqual({
+    if (!(command instanceof DeleteObjectCommand)) {
+      throw new Error("Se esperaba un DeleteObjectCommand");
+    }
+    expect(command.input).toEqual({
       Bucket: bucket,
       Key: url.slice(`${origin}/`.length),
     });
 
     await storage.remove("/uploads/avatars/not-owned.jpg");
-    expect(client.send).toHaveBeenCalledTimes(2);
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });
 

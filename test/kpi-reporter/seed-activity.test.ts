@@ -109,7 +109,7 @@ function readJsonBody(init: RequestInit | undefined): Record<string, unknown> {
     throw new Error("La API simulada recibió un body inválido");
   }
 
-  return value;
+  return value as Record<string, unknown>;
 }
 
 function readString(record: Record<string, unknown>, key: string): string {
