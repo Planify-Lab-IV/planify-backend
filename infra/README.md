@@ -169,6 +169,8 @@ El archivo `.env` de producción sigue viviendo únicamente en la EC2, en la ra�
 
 Si se agrega una variable de entorno nueva, debe cargarse por SSH en el `.env` de producción antes de mergear a `main` el código que la necesita. Si falta una variable, el deploy puede fallar durante el health check.
 
+Las variables SMTP de recuperación de contraseña son una excepción deliberada: son opcionales mientras `MAIL_TRANSPORT` no sea `smtp`, por lo que PLANIFY-153 puede desplegarse antes de la configuración de la cuenta de correo. Antes de habilitar el envío real, cargar `MAIL_TRANSPORT=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` y `MAIL_FROM` en el `.env` de la EC2.
+
 ### Volver atrás
 
 Para volver a una versión anterior, crear una PR que revierta el commit problemático:

@@ -24,6 +24,16 @@ const envSchema = z
     AVATAR_STORAGE: z.enum(["local", "s3"]).optional(),
     AVATAR_S3_BUCKET: z.string().trim().min(1).optional(),
     AWS_REGION: z.string().trim().min(1).optional(),
+    MAIL_TRANSPORT: z.enum(["console", "smtp"]).optional(),
+    SMTP_HOST: z.string().trim().min(1).default("smtp.gmail.com"),
+    SMTP_PORT: z.coerce
+      .number()
+      .int()
+      .refine((port) => port === 465 || port === 587, "SMTP_PORT debe ser 465 o 587")
+      .default(465),
+    SMTP_USER: z.string().trim().min(1).optional(),
+    SMTP_PASS: z.string().trim().min(1).optional(),
+    MAIL_FROM: z.string().trim().min(1).optional(),
     // --> Valida que la key JWT sea de al menos 32 caracteres como string
     INTERNAL_KPIS_TOKEN: z.string().min(32).optional(),
     FIREBASE_SERVICE_ACCOUNT_BASE64: z.string().trim().min(32).optional(),
@@ -44,6 +54,18 @@ const envSchema = z
           path: ["AWS_REGION"],
           message: "AWS_REGION es obligatoria cuando AVATAR_STORAGE es s3",
         });
+      }
+    }
+
+    if (value.MAIL_TRANSPORT === "smtp") {
+      for (const variable of ["SMTP_USER", "SMTP_PASS", "MAIL_FROM"] as const) {
+        if (!value[variable]) {
+          ctx.addIssue({
+            code: "custom",
+            path: [variable],
+            message: `${variable} es obligatoria cuando MAIL_TRANSPORT es smtp`,
+          });
+        }
       }
     }
 
