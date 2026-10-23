@@ -9,6 +9,7 @@ export interface GroupService {
   listMyGroups(userId: string): Promise<GroupSummary[]>;
   listMyGroupsOverview(userId: string): Promise<GroupOverview[]>;
   leaveGroup(groupId: string, userId: string): Promise<void>;
+  renameGroup(groupId: string, userId: string, name: string): Promise<GroupSummary>;
 }
 
 export function createGroupService(groupRepository: GroupRepository): GroupService {
@@ -37,6 +38,11 @@ export function createGroupService(groupRepository: GroupRepository): GroupServi
     async leaveGroup(groupId: string, userId: string): Promise<void> {
       await ensureGroupMember(groupId, userId);
       await groupRepository.removeMember(groupId, userId);
+    },
+
+    async renameGroup(groupId: string, userId: string, name: string): Promise<GroupSummary> {
+      await ensureGroupMember(groupId, userId);
+      return groupRepository.updateName(groupId, name);
     },
   };
 }

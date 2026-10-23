@@ -27,4 +27,8 @@ router.delete("/groups/:groupId/members/me", requireAuthenticatedUser, (req, res
   groupController.leaveGroup(req, res, next),
 );
 
+router.patch("/groups/:groupId", requireAuthenticatedUser, (req, res, next) =>
+  groupController.renameGroup(req, res, next),
+);
+
 export default router;

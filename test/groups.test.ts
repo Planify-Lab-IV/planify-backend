@@ -11,6 +11,7 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
     group: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
+      update: vi.fn(),
     },
     groupMember: {
       deleteMany: vi.fn(),
@@ -402,5 +403,108 @@ describe("DELETE /groups/:groupId/members/me", () => {
 
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("UNAUTHORIZED");
+  });
+});
+
+describe("PATCH /groups/:groupId", () => {
+  const authenticatedUserId = "user-1";
+  const validToken = createSessionTokenService(env.JWT_SECRET).sign(authenticatedUserId);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
+  });
+
+  it("renames a group for an authenticated member", async () => {
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: authenticatedUserId }],
+    } as never);
+    vi.mocked(prisma.group.update).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Familia",
+      _count: { members: 3 },
+    } as never);
+
+    const response = await request(app)
+      .patch("/groups/group-1")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ name: "  Familia  " });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({ id: "group-1", name: "Familia", memberCount: 3 });
+    expect(prisma.group.update).toHaveBeenCalledWith({
+      where: { id: "group-1" },
+      data: { name: "Familia" },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            members: true,
+          },
+        },
+      },
+    });
+  });
+
+  it("returns 404 when the group does not exist", async () => {
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce(null);
+
+    const response = await request(app)
+      .patch("/groups/missing-group")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ name: "Familia" });
+
+    expect(response.status).toBe(404);
+    expect(response.body).toMatchObject({ error: "NOT_FOUND", message: "Grupo no encontrado" });
+    expect(prisma.group.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when the authenticated user is not a member", async () => {
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: "user-2" }],
+    } as never);
+
+    const response = await request(app)
+      .patch("/groups/group-1")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ name: "Familia" });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({
+      error: "FORBIDDEN",
+      message: "No pertenecés a este grupo",
+    });
+    expect(prisma.group.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {},
+    { name: "" },
+    { name: "   " },
+    { name: "a".repeat(81) },
+    { name: "Familia", extra: true },
+  ])("returns 400 and does not update for an invalid body: %o", async (body) => {
+    const response = await request(app)
+      .patch("/groups/group-1")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send(body);
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe("INVALID_DATA");
+    expect(prisma.group.findUnique).not.toHaveBeenCalled();
+    expect(prisma.group.update).not.toHaveBeenCalled();
+  });
+
+  it("returns 401 when the token is missing", async () => {
+    const response = await request(app).patch("/groups/group-1").send({ name: "Familia" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.group.update).not.toHaveBeenCalled();
   });
 });

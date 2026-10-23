@@ -3,11 +3,13 @@ import { toGroupOverviewResponseDTO } from "../dtos/group/group-overview.respons
 import { toGroupResponseDTO } from "../dtos/group/group.response.dto.js";
 import type { GroupService } from "../services/group.service.js";
 import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
+import { validateRenameGroupDTO } from "../validators/group/rename.group.validator.js";
 
 export interface GroupController {
   listMyGroups(req: Request, res: Response, next: NextFunction): Promise<void>;
   listMyGroupsOverview(req: Request, res: Response, next: NextFunction): Promise<void>;
   leaveGroup(req: Request, res: Response, next: NextFunction): Promise<void>;
+  renameGroup(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 
 export function createGroupController(groupService: GroupService): GroupController {
@@ -59,6 +61,19 @@ export function createGroupController(groupService: GroupService): GroupControll
         await groupService.leaveGroup(groupId, userId);
 
         res.sendStatus(204);
+      } catch (error) {
+        next(error);
+      }
+    },
+
+    async renameGroup(req: Request, res: Response, next: NextFunction): Promise<void> {
+      try {
+        const groupId = getGroupId(req);
+        const userId = getUserId(req);
+        const dto = validateRenameGroupDTO(req.body);
+        const group = await groupService.renameGroup(groupId, userId, dto.name);
+
+        res.status(200).json(toGroupResponseDTO(group));
       } catch (error) {
         next(error);
       }
