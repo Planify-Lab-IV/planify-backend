@@ -7,8 +7,12 @@ import { participantRepository } from "../repositories/participant.repository.js
 import { taskRepository } from "../repositories/task.repository.js";
 import { createTaskService } from "../services/task.service.js";
 import { createActivityLogService } from "../services/activity-log.service.js";
-import { env } from "../shared/config/env.js";
+import { env, getFirebaseServiceAccount } from "../shared/config/env.js";
 import { createAttendanceAuthMiddleware } from "../shared/middlewares/attendance.auth.middleware.js";
+import { userRepository } from "../repositories/user.repository.js";
+import { pushDeviceRepository } from "../repositories/push-device.repository.js";
+import { createNotificationService } from "../services/notification.service.js";
+import { createConfiguredPushNotifier } from "../infrastructure/notifications/firebase.push.notifier.js";
 
 const router = Router();
 
@@ -17,11 +21,18 @@ const requireAttendanceAuth = createAttendanceAuthMiddleware(
   sessionTokenService,
   participantRepository,
   eventRepository,
+  userRepository,
 );
 const activityLogService = createActivityLogService(
   activityLogRepository,
   eventRepository,
   participantRepository,
+  createNotificationService(
+    pushDeviceRepository,
+    createConfiguredPushNotifier(getFirebaseServiceAccount(env)),
+    eventRepository,
+    participantRepository,
+  ),
 );
 const taskService = createTaskService(
   taskRepository,

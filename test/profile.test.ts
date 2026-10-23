@@ -50,9 +50,12 @@ function createInMemoryUserRepository(initialUser: User = user): UserRepository 
     findByEmail: vi.fn(async () => null),
     findPublicByIdentifier: vi.fn(async () => null),
     findByIdentifier: vi.fn(async () => null),
+    searchByUsername: vi.fn(async () => []),
     create: vi.fn(async () => {
       throw new Error("Not used in profile endpoint tests");
     }),
+    updatePassword: vi.fn(async () => undefined),
+    findPasswordChangedAt: vi.fn(async () => ({ passwordChangedAt: null })),
     updateProfile: vi.fn(async (_id, data) => {
       storedUser = { ...storedUser, ...data };
       return storedUser;
@@ -86,7 +89,7 @@ function createApp(
   if (uploadsDirectory) {
     app.use("/uploads", express.static(uploadsDirectory));
   }
-  app.use(createProfileRouter(profileService, createAuthMiddleware(tokenService)));
+  app.use(createProfileRouter(profileService, createAuthMiddleware(tokenService, userRepository)));
   app.use(errorHandler);
 
   return { app, userRepository };
@@ -97,6 +100,9 @@ function authenticatedRequest(app: express.Express) {
     .patch("/me/profile")
     .set("Authorization", `Bearer ${tokenService.sign(user.id)}`);
 }
+
+type InvalidProfileRequest = (app: express.Express) => request.Test;
+type InvalidProfileCase = [description: string, sendRequest: InvalidProfileRequest];
 
 describe("PATCH /me/profile", () => {
   it("actualiza solo el nombre del usuario autenticado", async () => {
@@ -176,7 +182,7 @@ describe("PATCH /me/profile", () => {
     expect(avatarStorage.remove).toHaveBeenNthCalledWith(2, "/uploads/avatars/first.png");
   });
 
-  it.each([
+  const invalidProfileCases: InvalidProfileCase[] = [
     [
       "a MIME type not allowed",
       (app: express.Express) =>
@@ -202,7 +208,7 @@ describe("PATCH /me/profile", () => {
               filename: "avatar.png",
               contentType,
             }),
-        ] as const,
+        ] as InvalidProfileCase,
     ),
     ["an empty name", (app: express.Express) => authenticatedRequest(app).send({ name: "   " })],
     [
@@ -213,7 +219,9 @@ describe("PATCH /me/profile", () => {
       "a request without name or avatar",
       (app: express.Express) => authenticatedRequest(app).send({}),
     ],
-  ])("returns INVALID_DATA for %s", async (_description, sendRequest) => {
+  ];
+
+  it.each(invalidProfileCases)("returns INVALID_DATA for %s", async (_description, sendRequest) => {
     const { app, userRepository } = createApp(createAvatarStorage());
 
     const response = await sendRequest(app);

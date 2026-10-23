@@ -13,7 +13,7 @@ import { createParticipantController } from "../controllers/participant.controll
 import { createParticipantService } from "../services/participant.service.js";
 import { participantRepository } from "../repositories/participant.repository.js";
 import { createPasswordHasher } from "../infrastructure/security/password.hasher.js";
-import { env } from "../shared/config/env.js";
+import { env, getFirebaseServiceAccount } from "../shared/config/env.js";
 import { invitationRepository } from "../repositories/invitation.repository.js";
 import { createInvitationsService } from "../services/invitations.service.js";
 import { createInvitationController } from "../controllers/invitation.controller.js";
@@ -29,21 +29,31 @@ import { createExpenseController } from "../controllers/expense.controller.js";
 import { createDebtController } from "../controllers/debt.controller.js";
 import { activityLogRepository } from "../repositories/activity-log.repository.js";
 import { createActivityLogService } from "../services/activity-log.service.js";
+import { pushDeviceRepository } from "../repositories/push-device.repository.js";
+import { createNotificationService } from "../services/notification.service.js";
+import { createConfiguredPushNotifier } from "../infrastructure/notifications/firebase.push.notifier.js";
 
 const router = Router();
 
 // -_> Inyección de dependencias
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
-const requireAuth = createAuthMiddleware(sessionTokenService);
+const requireAuth = createAuthMiddleware(sessionTokenService, userRepository);
 const requireAttendanceAuth = createAttendanceAuthMiddleware(
   sessionTokenService,
   participantRepository,
   eventRepository,
+  userRepository,
 );
 const activityLogService = createActivityLogService(
   activityLogRepository,
   eventRepository,
   participantRepository,
+  createNotificationService(
+    pushDeviceRepository,
+    createConfiguredPushNotifier(getFirebaseServiceAccount(env)),
+    eventRepository,
+    participantRepository,
+  ),
 );
 
 const eventService = createEventService(

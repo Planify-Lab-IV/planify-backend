@@ -35,7 +35,10 @@ describe("POST /events", () => {
     email: "organizer@test.com",
   };
 
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(prisma.user.findUnique).mockResolvedValue({ passwordChangedAt: null } as never);
+  });
 
   it("requires authentication", async () => {
     const response = await request(app).post("/events").send({
@@ -63,7 +66,9 @@ describe("POST /events", () => {
   });
 
   it("returns the public EventResponseDTO for an existing group", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(organizer as never);
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({ passwordChangedAt: null } as never)
+      .mockResolvedValueOnce(organizer as never);
     vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
       id: "group-1",
       name: "Test group",
@@ -130,7 +135,9 @@ describe("POST /events", () => {
   });
 
   it("resolves new group members by username or email", async () => {
-    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(organizer as never);
+    vi.mocked(prisma.user.findUnique)
+      .mockResolvedValueOnce({ passwordChangedAt: null } as never)
+      .mockResolvedValueOnce(organizer as never);
     const member = { id: "user-ana", name: "Ana", username: "ana", email: "ana@example.com" };
     vi.mocked(prisma.user.findFirst).mockResolvedValueOnce(member as never);
     vi.mocked(prisma.$transaction).mockImplementationOnce((async (

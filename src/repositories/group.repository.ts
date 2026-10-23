@@ -48,7 +48,9 @@ export interface GroupOverview extends GroupSummary {
 export interface GroupRepository {
   findById(id: string): Promise<GroupWithMembers | null>;
   isMember(groupId: string, userId: string): Promise<boolean>;
+  removeMember(groupId: string, userId: string): Promise<void>;
   create(data: { name: string }): Promise<Group>;
+  updateName(groupId: string, name: string): Promise<GroupSummary>;
   findByUserId(userId: string): Promise<GroupSummary[]>;
   findOverviewByUserId(userId: string): Promise<GroupOverview[]>;
 }
@@ -94,6 +96,15 @@ export const groupRepository: GroupRepository = {
     return membership !== null;
   },
 
+  async removeMember(groupId: string, userId: string): Promise<void> {
+    await prisma.groupMember.deleteMany({
+      where: {
+        groupId,
+        userId,
+      },
+    });
+  },
+
   // Crea grupo sin miembros inicialmente
   async create(data: { name: string }): Promise<Group> {
     return prisma.group.create({
@@ -105,6 +116,28 @@ export const groupRepository: GroupRepository = {
         name: true,
       },
     });
+  },
+
+  async updateName(groupId: string, name: string): Promise<GroupSummary> {
+    const group = await prisma.group.update({
+      where: { id: groupId },
+      data: { name },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            members: true,
+          },
+        },
+      },
+    });
+
+    return {
+      id: group.id,
+      name: group.name,
+      memberCount: group._count.members,
+    };
   },
 
   // --> Busca los grupos dado el usuario autenticado

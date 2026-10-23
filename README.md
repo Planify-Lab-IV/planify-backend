@@ -52,6 +52,31 @@ npx prisma studio
 
 [Planify Mobile](https://github.com/Planify-Lab-IV/planify-mobile)
 
+## Recuperación de contraseña
+
+En producción, con `MAIL_TRANSPORT=smtp`, el código de recuperación se entrega mediante SMTP. En desarrollo y cuando `MAIL_TRANSPORT` no está configurada, el código de seis dígitos sigue imprimiéndose en la consola para facilitar el desarrollo local.
+
+Cada código vence a los 30 minutos, admite cinco intentos y una cuenta puede solicitar hasta tres códigos por hora.
+
+Para probar SMTP sin usar la cuenta de producción, crear una cuenta de prueba en [Ethereal](https://nodemailer.com/guides/testing-with-ethereal) y copiar sus credenciales SMTP en un `.env` local no versionado:
+
+```env
+MAIL_TRANSPORT=smtp
+SMTP_HOST=smtp.ethereal.email
+SMTP_PORT=587
+SMTP_USER=<usuario de Ethereal>
+SMTP_PASS=<contraseña de Ethereal>
+MAIL_FROM=Planify <planify@example.com>
+```
+
+Una cuenta personal de Gmail admite hasta 500 destinatarios por día. Junto al límite de tres pedidos por hora por cuenta, alcanza para el MVP.
+
+## Notificaciones push
+
+El backend envía notificaciones a los demás participantes registrados de un evento cuando se crea una tarea, se registra un gasto o se confirma el horario. Las actualizaciones de disponibilidad no generan push. Los participantes anónimos no reciben push porque no registran dispositivos, pero las actividades que generan sí notifican a los demás participantes registrados.
+
+La variable opcional `FIREBASE_SERVICE_ACCOUNT_BASE64` contiene la cuenta de servicio de Firebase como JSON codificado en base64. Si no está configurada, el backend continúa funcionando y solo registra en el log que habría enviado una notificación; no se requieren credenciales de Firebase para desarrollo local.
+
 ### Git Flow (convenciones a seguir a la hora de nombrar una branch)
 
 - `feature/PLANIFY-<n>-descripcion` → `develop`

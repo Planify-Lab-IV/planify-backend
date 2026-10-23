@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "../src/infrastructure/prisma.js";
 import { httpMetricsRepository } from "../src/repositories/http-metrics.repository.js";
 
+const httpDailyMetric = prisma.httpDailyMetric as unknown as {
+  upsert: ReturnType<typeof vi.fn>;
+  findUnique: ReturnType<typeof vi.fn>;
+};
+
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     httpDailyMetric: {
@@ -25,7 +30,7 @@ describe("HttpMetricsRepository", () => {
 
     await httpMetricsRepository.addDailyMetrics("2026-10-12", delta);
 
-    expect(prisma.httpDailyMetric.upsert).toHaveBeenCalledWith({
+    expect(httpDailyMetric.upsert).toHaveBeenCalledWith({
       where: { date: new Date("2026-10-12T00:00:00.000Z") },
       create: {
         date: new Date("2026-10-12T00:00:00.000Z"),
@@ -45,11 +50,11 @@ describe("HttpMetricsRepository", () => {
       serverErrorCount: 2,
       responseDurationMs: 1540n,
     };
-    vi.mocked(prisma.httpDailyMetric.findUnique).mockResolvedValueOnce(metric);
+    httpDailyMetric.findUnique.mockResolvedValueOnce(metric);
 
     await expect(httpMetricsRepository.findDailyMetrics("2026-10-12")).resolves.toEqual(metric);
 
-    expect(prisma.httpDailyMetric.findUnique).toHaveBeenCalledWith({
+    expect(httpDailyMetric.findUnique).toHaveBeenCalledWith({
       where: { date: new Date("2026-10-12T00:00:00.000Z") },
       select: {
         requestCount: true,

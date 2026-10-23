@@ -26,9 +26,12 @@ describe("PasswordHasher", () => {
 describe("SessionTokenService", () => {
   const service = createSessionTokenService(TEST_SECRET);
 
-  it("returns the user ID from a signed token", () => {
+  it("returns the user session from a signed token", () => {
     const token = service.sign("user-123");
-    expect(service.verify(token)).toBe("user-123");
+    expect(service.verify(token)).toMatchObject({
+      userId: "user-123",
+      issuedAt: expect.any(Number),
+    });
   });
 
   it("lanza con un token inválido", () => {

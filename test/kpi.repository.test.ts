@@ -14,6 +14,11 @@ vi.mock("../src/infrastructure/prisma.js", () => ({
 import { prisma } from "../src/infrastructure/prisma.js";
 import { kpiRepository } from "../src/repositories/kpi.repository.js";
 
+const prismaMock = prisma as unknown as {
+  event: { count: ReturnType<typeof vi.fn> };
+  eventParticipant: { groupBy: ReturnType<typeof vi.fn> };
+};
+
 const day = "2026-10-13";
 const createdAt = {
   gte: new Date("2026-10-01T03:00:00.000Z"),
@@ -26,24 +31,24 @@ describe("KpiRepository", () => {
   });
 
   it("cuenta todos los eventos creados en el mes hasta el final del día", async () => {
-    vi.mocked(prisma.event.count).mockResolvedValueOnce(4);
+    prismaMock.event.count.mockResolvedValueOnce(4);
 
     await expect(kpiRepository.countEventsCreatedMonthToDate(day)).resolves.toBe(4);
 
-    expect(prisma.event.count).toHaveBeenCalledWith({
+    expect(prismaMock.event.count).toHaveBeenCalledWith({
       where: { createdAt },
     });
   });
 
   it("cuenta eventos con dos o más participantes reales", async () => {
-    vi.mocked(prisma.eventParticipant.groupBy).mockResolvedValueOnce([
+    prismaMock.eventParticipant.groupBy.mockResolvedValueOnce([
       { eventId: "event-1", _count: { eventId: 2 } },
       { eventId: "event-2", _count: { eventId: 3 } },
     ]);
 
     await expect(kpiRepository.countEventsWithMultipleParticipants(day)).resolves.toBe(2);
 
-    expect(prisma.eventParticipant.groupBy).toHaveBeenCalledWith({
+    expect(prismaMock.eventParticipant.groupBy).toHaveBeenCalledWith({
       by: ["eventId"],
       where: {
         event: { createdAt },
@@ -58,11 +63,11 @@ describe("KpiRepository", () => {
   });
 
   it("cuenta actividad persistida sin considerar deudas simplificadas", async () => {
-    vi.mocked(prisma.event.count).mockResolvedValueOnce(3);
+    prismaMock.event.count.mockResolvedValueOnce(3);
 
     await expect(kpiRepository.countEventsWithActivity(day)).resolves.toBe(3);
 
-    expect(prisma.event.count).toHaveBeenCalledWith({
+    expect(prismaMock.event.count).toHaveBeenCalledWith({
       where: {
         createdAt,
         OR: [

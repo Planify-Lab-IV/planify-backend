@@ -24,7 +24,8 @@ if ! [[ "$HOST_PORT" =~ ^[0-9]+$ ]] || ((HOST_PORT < 1 || HOST_PORT > 65535)); t
 fi
 
 echo "Reconstruyendo y levantando la API..."
-docker compose -f "$COMPOSE_FILE" up -d --build
+docker compose -f "$COMPOSE_FILE" build --pull
+docker compose -f "$COMPOSE_FILE" up -d
 
 echo "Esperando que la API responda en /health..."
 healthy=false
