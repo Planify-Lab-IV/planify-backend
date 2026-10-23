@@ -169,7 +169,56 @@ El archivo `.env` de producción sigue viviendo únicamente en la EC2, en la ra�
 
 Si se agrega una variable de entorno nueva, debe cargarse por SSH en el `.env` de producción antes de mergear a `main` el código que la necesita. Si falta una variable, el deploy puede fallar durante el health check.
 
-Las variables SMTP de recuperación de contraseña son una excepción deliberada: son opcionales mientras `MAIL_TRANSPORT` no sea `smtp`, por lo que PLANIFY-153 puede desplegarse antes de la configuración de la cuenta de correo. Antes de habilitar el envío real, cargar `MAIL_TRANSPORT=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` y `MAIL_FROM` en el `.env` de la EC2.
+### Recuperación de contraseña por SMTP
+
+Las variables SMTP son opcionales mientras `MAIL_TRANSPORT` no sea `smtp`.
+Cuando se habilita SMTP, la validación de configuración requiere `SMTP_USER`,
+`SMTP_PASS` y `MAIL_FROM`.
+
+La cuenta de producción es `planify.austral@gmail.com`, con el nombre visible
+**Planify**. Nacho administra la cuenta, incluyendo su recuperación, la
+verificación en dos pasos y las contraseñas de aplicación. La misma cuenta se
+usa para Firebase: bloquearla, cambiar su contraseña principal o perder el
+acceso de recuperación afecta tanto el envío de correos como la consola de
+Firebase.
+
+Configurar en el `.env` de la EC2 únicamente:
+
+```env
+MAIL_TRANSPORT=smtp
+SMTP_USER=planify.austral@gmail.com
+SMTP_PASS=<contraseña de aplicación entregada por Nacho>
+MAIL_FROM=Planify <planify.austral@gmail.com>
+```
+
+No guardar la contraseña de aplicación en el repositorio, un ticket ni un chat
+grupal. Solicitarla a Nacho por un canal privado y guardarla solo en el `.env`
+de producción y en el lugar de secretos acordado por el equipo. No hace falta
+configurar `SMTP_HOST` ni `SMTP_PORT`: el backend usa por defecto Gmail
+(`smtp.gmail.com`) y el puerto 465. `MAIL_FROM` debe usar la misma cuenta que
+`SMTP_USER`; de otro modo Gmail puede reemplazar el remitente mostrado.
+
+Después de un deploy, revisar los logs del contenedor:
+
+```bash
+docker logs planify-api
+```
+
+No debe aparecer `La recuperación de contraseña no envía mails: falta
+configurar MAIL_TRANSPORT=smtp`.
+
+#### Rotación de la contraseña de aplicación
+
+1. Pedirle a Nacho una nueva contraseña de aplicación para el backend.
+2. Reemplazar `SMTP_PASS` en el `.env` de la EC2.
+3. Hacer un deploy y comprobar que la API inicia y envía una recuperación.
+4. Recién entonces, Nacho debe revocar la contraseña de aplicación anterior.
+
+Gmail permite hasta 500 destinatarios por día para esta cuenta. Si Google
+bloquea la cuenta o solicita una verificación, avisar a Nacho para que lo
+resuelva con la cuenta administradora. Si el problema se repite o el límite
+deja de ser suficiente, evaluar un proveedor transaccional en un ticket
+separado.
 
 ### Volver atrás
 
