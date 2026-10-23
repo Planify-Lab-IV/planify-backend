@@ -74,6 +74,19 @@ function createFakeGroupRepository(
       groups.push({ ...group, members: [] });
       return group;
     }),
+    updateName: vi.fn(async (groupId, name) => {
+      const group = groups.find((candidate) => candidate.id === groupId);
+      if (!group) {
+        throw new Error("Group not found");
+      }
+
+      group.name = name;
+      return {
+        id: group.id,
+        name: group.name,
+        memberCount: group.members.length,
+      };
+    }),
     findByUserId: vi.fn(async (userId) =>
       groups
         .filter((group) => group.members.some((member) => member.userId === userId))
@@ -166,5 +179,82 @@ describe("GroupService.leaveGroup", () => {
 
     await expect(service.leaveGroup("group-1", "user-1")).rejects.toThrow(ForbiddenError);
     expect(groupRepository.removeMember).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("GroupService.renameGroup", () => {
+  it("renames a group for one of its members", async () => {
+    const groupRepository = createFakeGroupRepository([
+      makeGroup({
+        members: [
+          makeGroupMember(),
+          makeGroupMember({
+            userId: "user-2",
+            user: {
+              id: "user-2",
+              name: "Beto",
+              username: "beto",
+              email: "beto@example.com",
+            },
+          }),
+        ],
+      }),
+    ]);
+    const service = createGroupService(groupRepository);
+
+    await expect(service.renameGroup("group-1", "user-1", "Familia")).resolves.toEqual({
+      id: "group-1",
+      name: "Familia",
+      memberCount: 2,
+    });
+
+    expect(groupRepository.updateName).toHaveBeenCalledWith("group-1", "Familia");
+    await expect(service.listMyGroups("user-2")).resolves.toEqual([
+      { id: "group-1", name: "Familia", memberCount: 2 },
+    ]);
+  });
+
+  it("allows renaming a group to its existing name", async () => {
+    const groupRepository = createFakeGroupRepository([makeGroup()]);
+    const service = createGroupService(groupRepository);
+
+    await expect(service.renameGroup("group-1", "user-1", "Amigos")).resolves.toMatchObject({
+      name: "Amigos",
+    });
+    expect(groupRepository.updateName).toHaveBeenCalledWith("group-1", "Amigos");
+  });
+
+  it("returns not found without updating when the group does not exist", async () => {
+    const groupRepository = createFakeGroupRepository([]);
+    const service = createGroupService(groupRepository);
+
+    await expect(service.renameGroup("missing-group", "user-1", "Familia")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(groupRepository.updateName).not.toHaveBeenCalled();
+  });
+
+  it("returns forbidden without updating when the user is not a member", async () => {
+    const groupRepository = createFakeGroupRepository([
+      makeGroup({ members: [makeGroupMember({ userId: "user-2" })] }),
+    ]);
+    const service = createGroupService(groupRepository);
+
+    await expect(service.renameGroup("group-1", "user-1", "Familia")).rejects.toThrow(
+      ForbiddenError,
+    );
+    expect(groupRepository.updateName).not.toHaveBeenCalled();
+  });
+
+  it("returns forbidden after the user has left the group", async () => {
+    const groupRepository = createFakeGroupRepository([makeGroup()]);
+    const service = createGroupService(groupRepository);
+
+    await service.leaveGroup("group-1", "user-1");
+
+    await expect(service.renameGroup("group-1", "user-1", "Familia")).rejects.toThrow(
+      ForbiddenError,
+    );
+    expect(groupRepository.updateName).not.toHaveBeenCalled();
   });
 });
