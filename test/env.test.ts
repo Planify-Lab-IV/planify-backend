@@ -89,6 +89,9 @@ describe("password reset mail environment", () => {
         MAIL_FROM: "Planify <planify@gmail.com>",
       }),
     ).toThrow("AVATAR_S3_BUCKET");
+  });
+});
+
 describe("Firebase environment", () => {
   const serviceAccount = {
     project_id: "planify",

@@ -70,6 +70,7 @@ MAIL_FROM=Planify <planify@example.com>
 ```
 
 Una cuenta personal de Gmail admite hasta 500 destinatarios por día. Junto al límite de tres pedidos por hora por cuenta, alcanza para el MVP.
+
 ## Notificaciones push
 
 El backend envía notificaciones a los demás participantes registrados de un evento cuando se crea una tarea, se registra un gasto o se confirma el horario. Las actualizaciones de disponibilidad no generan push. Los participantes anónimos no reciben push porque no registran dispositivos, pero las actividades que generan sí notifican a los demás participantes registrados.

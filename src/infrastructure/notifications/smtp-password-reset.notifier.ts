@@ -35,8 +35,20 @@ export function createSmtpPasswordResetNotifier({
           text,
           html,
         })
-        .catch(() => {
-          console.error("No se pudo enviar el correo de recuperación");
+        .catch((error: unknown) => {
+          const code =
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            typeof (error as { code?: unknown }).code === "string"
+              ? (error as { code: string }).code
+              : undefined;
+
+          console.error(
+            code
+              ? `No se pudo enviar el correo de recuperación (${code})`
+              : "No se pudo enviar el correo de recuperación",
+          );
         });
 
       return Promise.resolve();

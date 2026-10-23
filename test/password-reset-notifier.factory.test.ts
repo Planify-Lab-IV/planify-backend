@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Transporter } from "nodemailer";
-import { createPasswordResetNotifier } from "../src/infrastructure/notifications/password-reset-notifier.factory.js";
+import {
+  createPasswordResetNotifier,
+  type MailConfig,
+} from "../src/infrastructure/notifications/password-reset-notifier.factory.js";
 
-const smtpConfig = {
-  NODE_ENV: "test" as const,
-  MAIL_TRANSPORT: "smtp" as const,
+const smtpConfig: MailConfig = {
+  NODE_ENV: "test",
+  MAIL_TRANSPORT: "smtp",
   SMTP_HOST: "smtp.example.com",
   SMTP_PORT: 465,
   SMTP_USER: "planify",

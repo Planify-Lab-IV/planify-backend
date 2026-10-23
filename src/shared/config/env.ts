@@ -66,6 +66,9 @@ const envSchema = z
             message: `${variable} es obligatoria cuando MAIL_TRANSPORT es smtp`,
           });
         }
+      }
+    }
+
     if (value.FIREBASE_SERVICE_ACCOUNT_BASE64) {
       try {
         decodeFirebaseServiceAccount(value.FIREBASE_SERVICE_ACCOUNT_BASE64);

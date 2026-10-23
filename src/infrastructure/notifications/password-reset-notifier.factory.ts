@@ -6,7 +6,7 @@ import {
 } from "./password-reset.notifier.js";
 import { createSmtpPasswordResetNotifier } from "./smtp-password-reset.notifier.js";
 
-type MailConfig = Pick<
+export type MailConfig = Pick<
   Env,
   | "NODE_ENV"
   | "MAIL_TRANSPORT"
