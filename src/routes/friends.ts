@@ -12,9 +12,8 @@ const requireAuthenticatedUser = createAuthMiddleware(
   createSessionTokenService(env.JWT_SECRET),
   userRepository,
 );
-const friendController = createFriendController(
-  createFriendService(friendshipRepository, userRepository),
-);
+export const friendService = createFriendService(friendshipRepository, userRepository);
+const friendController = createFriendController(friendService);
 
 router.get("/friends/search", requireAuthenticatedUser, (req, res, next) =>
   friendController.search(req, res, next),
