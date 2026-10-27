@@ -73,7 +73,7 @@ function createFakeGroupRepository(
     }),
     addMemberWithActiveEvents: vi.fn(async (groupId, user) => {
       const group = groups.find((candidate) => candidate.id === groupId);
-      if (group) {
+      if (group && !group.members.some((member) => member.userId === user.id)) {
         group.members.push(
           makeGroupMember({
             groupId,
@@ -368,7 +368,10 @@ describe("GroupService.addMember", () => {
     });
 
     await expect(service.addMember("group-1", "user-1", "user-2")).resolves.toBeUndefined();
-    expect(groupRepository.addMemberWithActiveEvents).not.toHaveBeenCalled();
+    expect(groupRepository.addMemberWithActiveEvents).toHaveBeenCalledWith(
+      "group-1",
+      expect.objectContaining({ id: "user-2" }),
+    );
   });
 
   it("rejects a requester who is not a member", async () => {

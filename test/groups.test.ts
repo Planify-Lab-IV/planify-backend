@@ -527,19 +527,19 @@ describe("POST /groups/:groupId/members", () => {
     vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ passwordChangedAt: null } as never);
   }
 
-  function mockAtomicMemberInsert() {
-    const create = vi.fn().mockResolvedValue({});
+  function mockAtomicMemberInsert(membershipCount = 1) {
+    const createManyMemberships = vi.fn().mockResolvedValue({ count: membershipCount });
     const findMany = vi.fn().mockResolvedValue([{ id: "event-active" }]);
     const createMany = vi.fn().mockResolvedValue({ count: 1 });
     vi.mocked(prisma.$transaction).mockImplementationOnce((async (
       callback: (tx: unknown) => unknown,
     ) =>
       callback({
-        groupMember: { create },
+        groupMember: { createMany: createManyMemberships },
         event: { findMany },
         eventParticipant: { createMany },
       })) as never);
-    return { create, findMany, createMany };
+    return { createManyMemberships, findMany, createMany };
   }
 
   it("adds an accepted friend and materializes them in active group events", async () => {
@@ -567,8 +567,9 @@ describe("POST /groups/:groupId/members", () => {
 
     expect(response.status).toBe(204);
     expect(response.text).toBe("");
-    expect(transaction.create).toHaveBeenCalledWith({
-      data: { groupId: "group-1", userId: "user-2" },
+    expect(transaction.createManyMemberships).toHaveBeenCalledWith({
+      data: [{ groupId: "group-1", userId: "user-2" }],
+      skipDuplicates: true,
     });
     expect(transaction.createMany).toHaveBeenCalledWith({
       data: [
@@ -599,7 +600,7 @@ describe("POST /groups/:groupId/members", () => {
       avatarUrl: null,
     } as never);
     vi.mocked(prisma.friendship.findUnique).mockResolvedValueOnce({ status: "accepted" } as never);
-    vi.mocked(prisma.groupMember.findUnique).mockResolvedValueOnce({ userId: "user-2" } as never);
+    const transaction = mockAtomicMemberInsert(0);
 
     const response = await request(app)
       .post("/groups/group-1/members")
@@ -607,7 +608,8 @@ describe("POST /groups/:groupId/members", () => {
       .send({ userId: "user-2" });
 
     expect(response.status).toBe(204);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(transaction.findMany).not.toHaveBeenCalled();
+    expect(transaction.createMany).not.toHaveBeenCalled();
   });
 
   it.each([{ status: "pending" }, null])(

@@ -64,10 +64,6 @@ export function createGroupService(
         throw new ForbiddenError("Solo podés agregar a tus amigos");
       }
 
-      if (await groupRepository.isMember(groupId, userId)) {
-        return;
-      }
-
       await groupRepository.addMemberWithActiveEvents(groupId, user);
     },
   };

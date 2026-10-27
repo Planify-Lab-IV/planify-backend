@@ -109,12 +109,12 @@ export const groupRepository: GroupRepository = {
 
   async addMemberWithActiveEvents(groupId: string, user: User): Promise<void> {
     await prisma.$transaction(async (tx) => {
-      await tx.groupMember.create({
-        data: {
-          groupId,
-          userId: user.id,
-        },
+      const membership = await tx.groupMember.createMany({
+        data: [{ groupId, userId: user.id }],
+        skipDuplicates: true,
       });
+
+      if (membership.count === 0) return;
 
       const events = await tx.event.findMany({
         where: {
