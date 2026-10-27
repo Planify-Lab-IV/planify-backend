@@ -3,6 +3,8 @@ import type {
   GroupRepository,
   GroupSummary,
 } from "../repositories/group.repository.js";
+import type { UserRepository } from "../repositories/user.repository.js";
+import type { FriendService } from "./friend.service.js";
 import { ForbiddenError, NotFoundError } from "../shared/errors/index.js";
 
 export interface GroupService {
@@ -10,9 +12,14 @@ export interface GroupService {
   listMyGroupsOverview(userId: string): Promise<GroupOverview[]>;
   leaveGroup(groupId: string, userId: string): Promise<void>;
   renameGroup(groupId: string, userId: string, name: string): Promise<GroupSummary>;
+  addMember(groupId: string, requesterId: string, userId: string): Promise<void>;
 }
 
-export function createGroupService(groupRepository: GroupRepository): GroupService {
+export function createGroupService(
+  groupRepository: GroupRepository,
+  friendService: FriendService,
+  userRepository: UserRepository,
+): GroupService {
   async function ensureGroupMember(groupId: string, userId: string): Promise<void> {
     const group = await groupRepository.findById(groupId);
     if (!group) {
@@ -43,6 +50,25 @@ export function createGroupService(groupRepository: GroupRepository): GroupServi
     async renameGroup(groupId: string, userId: string, name: string): Promise<GroupSummary> {
       await ensureGroupMember(groupId, userId);
       return groupRepository.updateName(groupId, name);
+    },
+
+    async addMember(groupId: string, requesterId: string, userId: string): Promise<void> {
+      await ensureGroupMember(groupId, requesterId);
+
+      const user = await userRepository.findById(userId);
+      if (!user) {
+        throw new NotFoundError("Usuario no encontrado");
+      }
+
+      if (!(await friendService.areFriends(requesterId, userId))) {
+        throw new ForbiddenError("Solo podés agregar a tus amigos");
+      }
+
+      if (await groupRepository.isMember(groupId, userId)) {
+        return;
+      }
+
+      await groupRepository.addMemberWithActiveEvents(groupId, user);
     },
   };
 }
