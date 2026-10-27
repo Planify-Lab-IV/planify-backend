@@ -2,6 +2,7 @@
 
 import { prisma } from "../infrastructure/prisma.js";
 import { parseEventStatus, type EventStatus } from "./event.repository.js";
+import type { User } from "./user.repository.js";
 
 export interface Group {
   id: string;
@@ -49,6 +50,7 @@ export interface GroupRepository {
   findById(id: string): Promise<GroupWithMembers | null>;
   isMember(groupId: string, userId: string): Promise<boolean>;
   removeMember(groupId: string, userId: string): Promise<void>;
+  addMemberWithActiveEvents(groupId: string, user: User): Promise<void>;
   create(data: { name: string }): Promise<Group>;
   updateName(groupId: string, name: string): Promise<GroupSummary>;
   findByUserId(userId: string): Promise<GroupSummary[]>;
@@ -102,6 +104,38 @@ export const groupRepository: GroupRepository = {
         groupId,
         userId,
       },
+    });
+  },
+
+  async addMemberWithActiveEvents(groupId: string, user: User): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+      await tx.groupMember.create({
+        data: {
+          groupId,
+          userId: user.id,
+        },
+      });
+
+      const events = await tx.event.findMany({
+        where: {
+          groupId,
+          status: { in: ["active", "confirmed"] },
+        },
+        select: { id: true },
+      });
+
+      if (events.length > 0) {
+        await tx.eventParticipant.createMany({
+          data: events.map((event) => ({
+            eventId: event.id,
+            userId: user.id,
+            username: user.username,
+            isAnonymous: false,
+            isOrganizer: false,
+          })),
+          skipDuplicates: true,
+        });
+      }
     });
   },
 
