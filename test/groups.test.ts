@@ -8,15 +8,21 @@ import { env } from "../src/shared/config/env.js";
 vi.mock("../src/infrastructure/prisma.js", () => ({
   prisma: {
     user: { findUnique: vi.fn() },
+    friendship: { findUnique: vi.fn() },
     group: {
       findUnique: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
     },
     groupMember: {
+      create: vi.fn(),
       deleteMany: vi.fn(),
+      findUnique: vi.fn(),
       findMany: vi.fn(),
     },
+    event: { findMany: vi.fn() },
+    eventParticipant: { createMany: vi.fn() },
+    $transaction: vi.fn(),
   },
 }));
 
@@ -506,5 +512,208 @@ describe("PATCH /groups/:groupId", () => {
     expect(response.status).toBe(401);
     expect(response.body.error).toBe("UNAUTHORIZED");
     expect(prisma.group.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /groups/:groupId/members", () => {
+  const authenticatedUserId = "user-1";
+  const validToken = createSessionTokenService(env.JWT_SECRET).sign(authenticatedUserId);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function mockAuthenticatedRequester() {
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({ passwordChangedAt: null } as never);
+  }
+
+  function mockAtomicMemberInsert(membershipCount = 1) {
+    const createManyMemberships = vi.fn().mockResolvedValue({ count: membershipCount });
+    const findMany = vi.fn().mockResolvedValue([{ id: "event-active" }]);
+    const createMany = vi.fn().mockResolvedValue({ count: 1 });
+    vi.mocked(prisma.$transaction).mockImplementationOnce((async (
+      callback: (tx: unknown) => unknown,
+    ) =>
+      callback({
+        groupMember: { createMany: createManyMemberships },
+        event: { findMany },
+        eventParticipant: { createMany },
+      })) as never);
+    return { createManyMemberships, findMany, createMany };
+  }
+
+  it("adds an accepted friend and materializes them in active group events", async () => {
+    mockAuthenticatedRequester();
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: authenticatedUserId }],
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: "user-2",
+      name: "Beto",
+      username: "beto",
+      email: "beto@example.com",
+      avatarUrl: null,
+    } as never);
+    vi.mocked(prisma.friendship.findUnique).mockResolvedValueOnce({ status: "accepted" } as never);
+    vi.mocked(prisma.groupMember.findUnique).mockResolvedValueOnce(null);
+    const transaction = mockAtomicMemberInsert();
+
+    const response = await request(app)
+      .post("/groups/group-1/members")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ userId: "user-2" });
+
+    expect(response.status).toBe(204);
+    expect(response.text).toBe("");
+    expect(transaction.createManyMemberships).toHaveBeenCalledWith({
+      data: [{ groupId: "group-1", userId: "user-2" }],
+      skipDuplicates: true,
+    });
+    expect(transaction.createMany).toHaveBeenCalledWith({
+      data: [
+        {
+          eventId: "event-active",
+          userId: "user-2",
+          username: "beto",
+          isAnonymous: false,
+          isOrganizer: false,
+        },
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it("returns 204 without creating duplicate rows when the friend is already a member", async () => {
+    mockAuthenticatedRequester();
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: authenticatedUserId }],
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+      id: "user-2",
+      name: "Beto",
+      username: "beto",
+      email: "beto@example.com",
+      avatarUrl: null,
+    } as never);
+    vi.mocked(prisma.friendship.findUnique).mockResolvedValueOnce({ status: "accepted" } as never);
+    const transaction = mockAtomicMemberInsert(0);
+
+    const response = await request(app)
+      .post("/groups/group-1/members")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ userId: "user-2" });
+
+    expect(response.status).toBe(204);
+    expect(transaction.findMany).not.toHaveBeenCalled();
+    expect(transaction.createMany).not.toHaveBeenCalled();
+  });
+
+  it.each([{ status: "pending" }, null])(
+    "returns 403 and does not persist when friendship is not accepted: %o",
+    async (friendship) => {
+      mockAuthenticatedRequester();
+      vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+        id: "group-1",
+        name: "Amigos",
+        members: [{ userId: authenticatedUserId }],
+      } as never);
+      vi.mocked(prisma.user.findUnique).mockResolvedValueOnce({
+        id: "user-2",
+        name: "Beto",
+        username: "beto",
+        email: "beto@example.com",
+        avatarUrl: null,
+      } as never);
+      vi.mocked(prisma.friendship.findUnique).mockResolvedValueOnce(friendship as never);
+
+      const response = await request(app)
+        .post("/groups/group-1/members")
+        .set("Authorization", `Bearer ${validToken}`)
+        .send({ userId: "user-2" });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toMatchObject({
+        error: "FORBIDDEN",
+        message: "Solo podés agregar a tus amigos",
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns 403 when the requester does not belong to the group", async () => {
+    mockAuthenticatedRequester();
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: "user-3" }],
+    } as never);
+
+    const response = await request(app)
+      .post("/groups/group-1/members")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ userId: "user-2" });
+
+    expect(response.status).toBe(403);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 for a missing group or user", async () => {
+    mockAuthenticatedRequester();
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce(null);
+    const missingGroup = await request(app)
+      .post("/groups/missing/members")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ userId: "user-2" });
+
+    expect(missingGroup.status).toBe(404);
+    expect(missingGroup.body).toMatchObject({ error: "NOT_FOUND", message: "Grupo no encontrado" });
+
+    mockAuthenticatedRequester();
+    vi.mocked(prisma.group.findUnique).mockResolvedValueOnce({
+      id: "group-1",
+      name: "Amigos",
+      members: [{ userId: authenticatedUserId }],
+    } as never);
+    vi.mocked(prisma.user.findUnique).mockResolvedValueOnce(null);
+    const missingUser = await request(app)
+      .post("/groups/group-1/members")
+      .set("Authorization", `Bearer ${validToken}`)
+      .send({ userId: "missing" });
+
+    expect(missingUser.status).toBe(404);
+    expect(missingUser.body).toMatchObject({
+      error: "NOT_FOUND",
+      message: "Usuario no encontrado",
+    });
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it.each([{}, { userId: "" }, { userId: "user-2", extra: true }])(
+    "returns 400 for an invalid body: %o",
+    async (body) => {
+      mockAuthenticatedRequester();
+
+      const response = await request(app)
+        .post("/groups/group-1/members")
+        .set("Authorization", `Bearer ${validToken}`)
+        .send(body);
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe("INVALID_DATA");
+      expect(prisma.group.findUnique).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns 401 without an access token", async () => {
+    const response = await request(app).post("/groups/group-1/members").send({ userId: "user-2" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error).toBe("UNAUTHORIZED");
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

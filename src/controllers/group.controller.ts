@@ -3,6 +3,7 @@ import { toGroupOverviewResponseDTO } from "../dtos/group/group-overview.respons
 import { toGroupResponseDTO } from "../dtos/group/group.response.dto.js";
 import type { GroupService } from "../services/group.service.js";
 import { UnauthorizedError, ValidationError } from "../shared/errors/index.js";
+import { validateAddGroupMemberDTO } from "../validators/group/add.group.member.validator.js";
 import { validateRenameGroupDTO } from "../validators/group/rename.group.validator.js";
 
 export interface GroupController {
@@ -10,6 +11,7 @@ export interface GroupController {
   listMyGroupsOverview(req: Request, res: Response, next: NextFunction): Promise<void>;
   leaveGroup(req: Request, res: Response, next: NextFunction): Promise<void>;
   renameGroup(req: Request, res: Response, next: NextFunction): Promise<void>;
+  addMember(req: Request, res: Response, next: NextFunction): Promise<void>;
 }
 
 export function createGroupController(groupService: GroupService): GroupController {
@@ -74,6 +76,19 @@ export function createGroupController(groupService: GroupService): GroupControll
         const group = await groupService.renameGroup(groupId, userId, dto.name);
 
         res.status(200).json(toGroupResponseDTO(group));
+      } catch (error) {
+        next(error);
+      }
+    },
+
+    async addMember(req: Request, res: Response, next: NextFunction): Promise<void> {
+      try {
+        const groupId = getGroupId(req);
+        const requesterId = getUserId(req);
+        const dto = validateAddGroupMemberDTO(req.body);
+        await groupService.addMember(groupId, requesterId, dto.userId);
+
+        res.sendStatus(204);
       } catch (error) {
         next(error);
       }
