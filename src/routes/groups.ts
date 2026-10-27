@@ -6,13 +6,14 @@ import { createSessionTokenService } from "../infrastructure/security/session.to
 import { env } from "../shared/config/env.js";
 import { createAuthMiddleware } from "../shared/middlewares/auth.middleware.js";
 import { userRepository } from "../repositories/user.repository.js";
+import { friendService } from "./friends.js";
 
 const router = Router();
 
 const sessionTokenService = createSessionTokenService(env.JWT_SECRET);
 const requireAuthenticatedUser = createAuthMiddleware(sessionTokenService, userRepository);
 
-const groupService = createGroupService(groupRepository);
+const groupService = createGroupService(groupRepository, friendService, userRepository);
 const groupController = createGroupController(groupService);
 
 router.get("/me/groups/overview", requireAuthenticatedUser, (req, res, next) =>
@@ -29,6 +30,10 @@ router.delete("/groups/:groupId/members/me", requireAuthenticatedUser, (req, res
 
 router.patch("/groups/:groupId", requireAuthenticatedUser, (req, res, next) =>
   groupController.renameGroup(req, res, next),
+);
+
+router.post("/groups/:groupId/members", requireAuthenticatedUser, (req, res, next) =>
+  groupController.addMember(req, res, next),
 );
 
 export default router;
