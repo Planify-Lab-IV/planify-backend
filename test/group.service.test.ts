@@ -5,7 +5,9 @@ import type {
   GroupRepository,
   GroupWithMembers,
 } from "../src/repositories/group.repository.js";
-import { createGroupService } from "../src/services/group.service.js";
+import type { UserRepository } from "../src/repositories/user.repository.js";
+import type { FriendService } from "../src/services/friend.service.js";
+import { createGroupService as createBaseGroupService } from "../src/services/group.service.js";
 import { ForbiddenError, NotFoundError } from "../src/shared/errors/index.js";
 
 function makeGroupMember(overrides: Partial<GroupMemberWithUser> = {}): GroupMemberWithUser {
@@ -69,6 +71,23 @@ function createFakeGroupRepository(
         group.members = group.members.filter((member) => member.userId !== userId);
       }
     }),
+    addMemberWithActiveEvents: vi.fn(async (groupId, user) => {
+      const group = groups.find((candidate) => candidate.id === groupId);
+      if (group) {
+        group.members.push(
+          makeGroupMember({
+            groupId,
+            userId: user.id,
+            user: {
+              id: user.id,
+              name: user.name,
+              username: user.username,
+              email: user.email,
+            },
+          }),
+        );
+      }
+    }),
     create: vi.fn(async (data) => {
       const group = { id: `group-${groups.length + 1}`, name: data.name };
       groups.push({ ...group, members: [] });
@@ -98,6 +117,14 @@ function createFakeGroupRepository(
     ),
     findOverviewByUserId: vi.fn(async () => overviews),
   };
+}
+
+function createGroupService(groupRepository: GroupRepository) {
+  return createBaseGroupService(
+    groupRepository,
+    { areFriends: vi.fn() } as unknown as FriendService,
+    { findById: vi.fn() } as unknown as UserRepository,
+  );
 }
 
 describe("GroupService.listMyGroupsOverview", () => {
@@ -256,5 +283,115 @@ describe("GroupService.renameGroup", () => {
       ForbiddenError,
     );
     expect(groupRepository.updateName).not.toHaveBeenCalled();
+  });
+});
+
+describe("GroupService.addMember", () => {
+  function createAddMemberContext(options?: {
+    groups?: GroupWithMembers[];
+    friend?: boolean;
+    user?: { id: string; name: string; username: string; email: string; avatarUrl: null } | null;
+  }) {
+    const groupRepository = createFakeGroupRepository(options?.groups ?? [makeGroup()]);
+    const friendService = {
+      areFriends: vi.fn().mockResolvedValue(options?.friend ?? true),
+    } as unknown as FriendService;
+    const userRepository = {
+      findById: vi.fn().mockResolvedValue(
+        options?.user === undefined
+          ? {
+              id: "user-2",
+              name: "Beto",
+              username: "beto",
+              email: "beto@example.com",
+              avatarUrl: null,
+            }
+          : options.user,
+      ),
+    } as unknown as UserRepository;
+
+    return {
+      groupRepository,
+      friendService,
+      userRepository,
+      service: createBaseGroupService(groupRepository, friendService, userRepository),
+    };
+  }
+
+  it("adds an existing friend and delegates the atomic persistence", async () => {
+    const { service, groupRepository, friendService, userRepository } = createAddMemberContext();
+
+    await expect(service.addMember("group-1", "user-1", "user-2")).resolves.toBeUndefined();
+
+    expect(userRepository.findById).toHaveBeenCalledWith("user-2");
+    expect(friendService.areFriends).toHaveBeenCalledWith("user-1", "user-2");
+    expect(groupRepository.addMemberWithActiveEvents).toHaveBeenCalledWith(
+      "group-1",
+      expect.objectContaining({ id: "user-2", username: "beto" }),
+    );
+  });
+
+  it("makes the new member see the group with its updated member count", async () => {
+    const { service } = createAddMemberContext();
+
+    await service.addMember("group-1", "user-1", "user-2");
+
+    await expect(service.listMyGroups("user-2")).resolves.toEqual([
+      { id: "group-1", name: "Amigos", memberCount: 2 },
+    ]);
+  });
+
+  it("rejects a user who is not an accepted friend", async () => {
+    const { service, groupRepository } = createAddMemberContext({ friend: false });
+
+    await expect(service.addMember("group-1", "user-1", "user-2")).rejects.toThrow(
+      "Solo podés agregar a tus amigos",
+    );
+    expect(groupRepository.addMemberWithActiveEvents).not.toHaveBeenCalled();
+  });
+
+  it("rejects a pending friendship because areFriends returns false", async () => {
+    const { service, groupRepository, friendService } = createAddMemberContext({ friend: false });
+
+    await expect(service.addMember("group-1", "user-1", "user-2")).rejects.toThrow(ForbiddenError);
+    expect(friendService.areFriends).toHaveBeenCalledOnce();
+    expect(groupRepository.addMemberWithActiveEvents).not.toHaveBeenCalled();
+  });
+
+  it("is idempotent when the user is already a member", async () => {
+    const { service, groupRepository } = createAddMemberContext({
+      groups: [
+        makeGroup({
+          members: [makeGroupMember(), makeGroupMember({ userId: "user-2" })],
+        }),
+      ],
+    });
+
+    await expect(service.addMember("group-1", "user-1", "user-2")).resolves.toBeUndefined();
+    expect(groupRepository.addMemberWithActiveEvents).not.toHaveBeenCalled();
+  });
+
+  it("rejects a requester who is not a member", async () => {
+    const { service, groupRepository, userRepository } = createAddMemberContext({
+      groups: [makeGroup({ members: [makeGroupMember({ userId: "user-3" })] })],
+    });
+
+    await expect(service.addMember("group-1", "user-1", "user-2")).rejects.toThrow(ForbiddenError);
+    expect(userRepository.findById).not.toHaveBeenCalled();
+    expect(groupRepository.addMemberWithActiveEvents).not.toHaveBeenCalled();
+  });
+
+  it("rejects missing groups and users without persisting a membership", async () => {
+    const missingGroup = createAddMemberContext({ groups: [] });
+    await expect(missingGroup.service.addMember("missing", "user-1", "user-2")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(missingGroup.groupRepository.addMemberWithActiveEvents).not.toHaveBeenCalled();
+
+    const missingUser = createAddMemberContext({ user: null });
+    await expect(missingUser.service.addMember("group-1", "user-1", "missing")).rejects.toThrow(
+      NotFoundError,
+    );
+    expect(missingUser.groupRepository.addMemberWithActiveEvents).not.toHaveBeenCalled();
   });
 });
